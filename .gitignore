@@ -1,0 +1,4 @@
+build/
+dist/
+qubes_stats.egg-info/
+*.py[co]

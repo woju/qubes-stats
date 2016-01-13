@@ -2,7 +2,7 @@
 
 #
 # Statistics plotter for Qubes OS infrastructure.
-# Copyright (C) 2015  Wojtek Porczyk <woju@invisiblethingslab.com>
+# Copyright (C) 2015-2016  Wojtek Porczyk <woju@invisiblethingslab.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import print_function
+from __future__ import absolute_import, print_function
 
 import argparse
 import datetime
@@ -27,15 +27,17 @@ import json
 import logging
 import logging.handlers
 import os
-import sys
 
 import dateutil.parser
 
 import matplotlib
 matplotlib.use('Agg')
+import matplotlib.patches
 import matplotlib.pyplot as plt
 import matplotlib.dates
 import matplotlib.ticker
+
+import qubesstats
 
 
 MM = 1 / 25.4
@@ -84,39 +86,16 @@ COLOURS = {
 }
 
 
-logging.addLevelName(25, 'NOTICE')
-class BetterSysLogHandler(logging.handlers.SysLogHandler):
-    priority_map = logging.handlers.SysLogHandler.priority_map.copy()
-    priority_map['NOTICE'] = 'notice'
-
-def excepthook(exctype, value, traceback):
-    logging.exception('exception')
-    return sys.__excepthook__(exctype, value, traceback)
-
-def setup_logging(level=25):
-    handler = BetterSysLogHandler(address='/var/run/log')
-    handler.setFormatter(
-        logging.Formatter('%(module)s[%(process)d]: %(message)s'))
-    logging.root.addHandler(handler)
-
-#   handler = logging.StreamHandler(sys.stderr)
-#   handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
-#   logging.root.addHandler(handler)
-
-    sys.excepthook = excepthook
-    logging.root.setLevel(level)
-
-
 def main():
-    setup_logging()
+    qubesstats.setup_logging()
     args = parser.parse_args()
     stats = json.load(open(args.datafile))
 
     meta = stats['meta']
     del stats['meta']
 
-    logging.log(25, 'loaded datafile {!r}, last updated {!r}'.format(
-        args.datafile, meta['last-updated']))
+    logging.log(25, 'loaded datafile %r, last updated %r',
+        args.datafile, meta['last-updated'])
 
     all_versions = set()
     for month in stats.values():
@@ -125,7 +104,7 @@ def main():
     all_versions = list(sorted(all_versions,
         key=distutils.version.LooseVersion))
 
-    fig = matplotlib.pyplot.figure(figsize=(160 * MM, 120 * MM), dpi=DPI)
+    fig = matplotlib.pyplot.figure(figsize=(240 * MM, 160 * MM), dpi=DPI)
     ax = fig.add_axes((.12, .12, .85, .80))
     ax.xaxis.set_major_locator(x_major_locator)
     ax.xaxis.set_major_formatter(x_major_formatter)
@@ -145,30 +124,47 @@ def main():
         ax.spines[spine].set_linewidth(0.5)
 
 #   ax.set_xlim
-    ax.grid(True, which='major', linestyle=':', alpha=0.7)
+    ax.yaxis.grid(True, which='major', linestyle=':', alpha=0.7)
 
     bar_width = 25.0 / len(all_versions)
+
+    handles = []
+
     for i in range(len(all_versions)):
         version = all_versions[i]
         offset = datetime.timedelta(
             days=25.0 * (float(i) / len(all_versions) - 0.5))
-        data = []
+        data_plain = []
+        data_tor = []
         for month, mdata in sorted(stats.items()):
             if version in mdata:
-                data.append((
+                data_plain.append((
                     dateutil.parser.parse(month).replace(day=1) + offset,
-                    mdata[version]))
+                    mdata[version]['plain']))
+                data_tor.append((
+                    dateutil.parser.parse(month).replace(day=1) + offset,
+                    mdata[version]['tor']))
 
-        ax.bar(*zip(*data), label=version,
+        ax.bar(*zip(*data_tor), hatch='////',
             color=COLOURS.get(version, '#ff0000'), #TANGO['ScarletRed1']),
             width=bar_width,
             linewidth=0.5)
 
+        handles.append(
+        ax.bar(*zip(*data_plain), bottom=zip(*data_tor)[1], label=version,
+            color=COLOURS.get(version, '#ff0000'), #TANGO['ScarletRed1']),
+            width=bar_width,
+            linewidth=0.5))
+
     data = []
     for month, mdata in sorted(stats.items()):
-        data.append((dateutil.parser.parse(month).replace(day=1), mdata['any']))
-    ax.plot(*zip(*data), label='any', color='#e79e27', linewidth=3)
-        #TANGO['ScarletRed2'])
+        data.append((
+            dateutil.parser.parse(month).replace(day=1),
+            sum(mdata['any'].values())))
+    line, = ax.plot(*zip(*data[:-1]), label='any', color='#e79e27', linewidth=3)
+    handles.append(line)
+    ax.plot(*zip(*data[-2:]), label='any', color='#e79e27', linewidth=3,
+        linestyle='--')
 
     fig.text(0.02, 0.02,
         'last updated: {meta[last-updated]}\n{meta[source]}'.format(meta=meta),
@@ -178,12 +174,15 @@ def main():
         'connecting to the Qubes updates server each month.',
         size='x-small', alpha=0.5, ha='right')
 
-    plt.legend(loc=2, ncol=2, prop={'size': 8}, ).get_frame().set_linewidth(0.5)
+    handles.append(matplotlib.patches.Patch(
+        facecolor='white', hatch='///', label='TOR', linewidth=0.5))
+    plt.legend(
+        loc=2, ncol=2, prop={'size': 8}, handles=handles).get_frame().set_linewidth(0.5)
+
     plt.title(meta['title'])
     fig.savefig(args.output + '.png', format='png')
     fig.savefig(args.output + '.svg', format='svg')
     plt.close()
-
 
 
 if __name__ == '__main__':
