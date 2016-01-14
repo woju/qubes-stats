@@ -163,8 +163,8 @@ def main():
             sum(mdata['any'].values())))
     line, = ax.plot(*zip(*data[:-1]), label='any', color='#e79e27', linewidth=3)
     handles.append(line)
-    ax.plot(*zip(*data[-2:]), label='any', color='#e79e27', linewidth=3,
-        linestyle='--')
+#   ax.plot(*zip(*data[-2:]), label='any', color='#e79e27', linewidth=3,
+#       linestyle='--')
 
     fig.text(0.02, 0.02,
         'last updated: {meta[last-updated]}\n{meta[source]}'.format(meta=meta),
