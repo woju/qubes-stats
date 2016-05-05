@@ -175,7 +175,7 @@ def main():
         size='x-small', alpha=0.5, ha='right')
 
     handles.append(matplotlib.patches.Patch(
-        facecolor='white', hatch='///', label='TOR', linewidth=0.5))
+        facecolor='white', hatch='///', label='Tor', linewidth=0.5))
     plt.legend(
         loc=2, ncol=2, prop={'size': 8}, handles=handles).get_frame().set_linewidth(0.5)
 
