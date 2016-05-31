@@ -43,6 +43,8 @@ import qubesstats
 MM = 1 / 25.4
 DPI = 300.0
 
+BAR_WIDTH = 25.0  # days on X axis
+
 parser = argparse.ArgumentParser()
 
 parser = argparse.ArgumentParser()
@@ -85,97 +87,136 @@ COLOURS = {
     'r3.1': '#63a0ff',
 }
 
+class LoadedStats(dict):
+    def __init__(self, datafile):
+        stats = json.load(open(datafile))
+        self.meta = stats['meta']
+        del stats['meta']
+
+        logging.log(25, 'loaded datafile %r, last updated %r',
+            datafile, self.meta['last-updated'])
+
+        releases = set()
+        for mdata in list(stats.values()):
+            releases.update(ver.split('-')[0] for ver in mdata.keys())
+        releases.discard('any')
+        self.releases = list(sorted(releases,
+            key=distutils.version.LooseVersion))
+
+        for month in stats:
+            if month not in self:
+                self[month] = {}
+
+            for release in self.releases:
+                for key in stats[month]:
+                    if not key == release or key.startswith(release + '-'):
+                        continue
+                    if release not in self:
+                        self[month][release] = stats[month][release]
+                    else:
+                        for series, sdata in stats[month][key].items():
+                            self[month][release][series] += sdata
+
+    @property
+    def months(self):
+        return sorted(self)
+
+    def get_series(self, release, series):
+        for month in self.months:
+            try:
+                yield self[month][release][series]
+            except KeyError:
+                yield 0
+
+
+class Graph(object):
+    def __init__(self, stats):
+        self.stats = stats
+
+        self.fig = matplotlib.pyplot.figure(
+            figsize=(240 * MM, 160 * MM), dpi=DPI)
+        self.ax = self.fig.add_axes((.12, .12, .85, .80))
+
+        self.handles = []
+
+        self.setup_ax()
+        self.add_data()
+        self.setup_text()
+
+    def setup_ax(self):
+        self.ax.xaxis.set_major_locator(x_major_locator)
+        self.ax.xaxis.set_major_formatter(x_major_formatter)
+        self.ax.yaxis.set_major_formatter(y_major_formatter)
+        self.ax.tick_params(labelsize='small')
+
+        padding = datetime.timedelta(days=20)
+        self.ax.set_xlim(
+            qubesstats.parse_date(self.stats.months[ 0]) - padding,
+            qubesstats.parse_date(self.stats.months[-1]) + padding)
+
+        self.ax.set_ylabel('Unique IP addresses')
+
+        for spine in ('top', 'bottom', 'left', 'right'):
+            self.ax.spines[spine].set_linewidth(0.5)
+
+#       ax.set_xlim
+        self.ax.yaxis.grid(True, which='major', linestyle=':', alpha=0.7)
+
+    def add_data(self):
+        bottom = (0,) * len(self.stats)
+        offset = datetime.timedelta(days=BAR_WIDTH * 0.5)
+        months = tuple(qubesstats.parse_date(i) - offset
+            for i in self.stats.months)
+        for release in self.stats.releases:
+            for series in ('tor', 'plain'):
+                sdata = tuple(self.stats.get_series(release, series))
+                handle = self.ax.bar(
+                    months,
+                    sdata,
+                    bottom=bottom,
+                    hatch=('///' if series == 'tor' else None),
+                    label=(release if series == 'plain' else None),
+                    color=COLOURS.get(release, '#ff0000'), #TANGO['ScarletRed1']
+                    width=BAR_WIDTH,
+                    linewidth=0.5)
+                if series == 'plain':
+                    self.handles.append(handle)
+
+                bottom = tuple(bottom[i] + sdata[i] for i in range(len(bottom)))
+
+    def setup_text(self):
+        self.fig.text(0.02, 0.02,
+            'last updated: {meta[last-updated]}\n{meta[source]}'.format(
+                meta=self.stats.meta),
+            size='x-small', alpha=0.5)
+        self.fig.text(0.98, 0.02,
+            'Stats are based on counting the number of unique IPs\n'
+            'connecting to the Qubes updates server each month.',
+            size='x-small', alpha=0.5, ha='right')
+
+        self.handles.append(matplotlib.patches.Patch(
+            facecolor='white', hatch='///', label='Tor', linewidth=0.5))
+
+        legend = plt.legend(
+            loc=2, ncol=2, prop={'size': 8}, handles=self.handles)
+        legend.get_frame().set_linewidth(0.5)
+
+        plt.title(self.stats.meta['title'])
+
+    def save(self, output):
+        self.fig.savefig(output + '.png', format='png')
+        self.fig.savefig(output + '.svg', format='svg')
+        plt.close()
+
+
+
 
 def main():
     qubesstats.setup_logging()
     args = parser.parse_args()
-    stats = json.load(open(args.datafile))
-
-    meta = stats['meta']
-    del stats['meta']
-
-    logging.log(25, 'loaded datafile %r, last updated %r',
-        args.datafile, meta['last-updated'])
-
-    all_versions = set()
-    for month in stats.values():
-        all_versions.update(month)
-    all_versions.discard('any')
-    all_versions = list(sorted(all_versions,
-        key=distutils.version.LooseVersion))
-
-    fig = matplotlib.pyplot.figure(figsize=(240 * MM, 160 * MM), dpi=DPI)
-    ax = fig.add_axes((.12, .12, .85, .80))
-    ax.xaxis.set_major_locator(x_major_locator)
-    ax.xaxis.set_major_formatter(x_major_formatter)
-    ax.yaxis.set_major_formatter(y_major_formatter)
-    ax.tick_params(labelsize='small')
-
-    months = list(sorted(stats))
-    ax.set_xlim(
-        qubesstats.parse_date(months[ 0]) - datetime.timedelta(days=20),
-        qubesstats.parse_date(months[-1]) + datetime.timedelta(days=20))
-
-    ax.set_ylabel('Unique IP addresses')
-
-    for spine in ('top', 'bottom', 'left', 'right'):
-        ax.spines[spine].set_linewidth(0.5)
-
-#   ax.set_xlim
-    ax.yaxis.grid(True, which='major', linestyle=':', alpha=0.7)
-
-    bar_width = 25.0 / len(all_versions)
-
-    handles = []
-
-    for i in range(len(all_versions)):
-        version = all_versions[i]
-        offset = datetime.timedelta(
-            days=25.0 * (float(i) / len(all_versions) - 0.5))
-        data_plain = []
-        data_tor = []
-        for month, mdata in sorted(stats.items()):
-            if version in mdata:
-                timestamp = qubesstats.parse_date(month) + offset
-                data_plain.append((timestamp, mdata[version]['plain']))
-                data_tor.append((timestamp, mdata[version]['tor']))
-
-        ax.bar(*zip(*data_tor), hatch='////',
-            color=COLOURS.get(version, '#ff0000'), #TANGO['ScarletRed1']),
-            width=bar_width,
-            linewidth=0.5)
-
-        handles.append(
-        ax.bar(*zip(*data_plain), bottom=zip(*data_tor)[1], label=version,
-            color=COLOURS.get(version, '#ff0000'), #TANGO['ScarletRed1']),
-            width=bar_width,
-            linewidth=0.5))
-
-    data = []
-    for month, mdata in sorted(stats.items()):
-        data.append((qubesstats.parse_date(month), sum(mdata['any'].values())))
-    line, = ax.plot(*zip(*data[:-1]), label='any', color='#e79e27', linewidth=3)
-    handles.append(line)
-#   ax.plot(*zip(*data[-2:]), label='any', color='#e79e27', linewidth=3,
-#       linestyle='--')
-
-    fig.text(0.02, 0.02,
-        'last updated: {meta[last-updated]}\n{meta[source]}'.format(meta=meta),
-        size='x-small', alpha=0.5)
-    fig.text(0.98, 0.02,
-        'Stats are based on counting the number of unique IPs\n'
-        'connecting to the Qubes updates server each month.',
-        size='x-small', alpha=0.5, ha='right')
-
-    handles.append(matplotlib.patches.Patch(
-        facecolor='white', hatch='///', label='Tor', linewidth=0.5))
-    plt.legend(
-        loc=2, ncol=2, prop={'size': 8}, handles=handles).get_frame().set_linewidth(0.5)
-
-    plt.title(meta['title'])
-    fig.savefig(args.output + '.png', format='png')
-    fig.savefig(args.output + '.svg', format='svg')
-    plt.close()
+    stats = LoadedStats(args.datafile)
+    graph = Graph(stats)
+    graph.save(args.output)
 
 
 if __name__ == '__main__':
