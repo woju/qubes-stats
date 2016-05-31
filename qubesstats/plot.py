@@ -113,10 +113,8 @@ def main():
 
     months = list(sorted(stats))
     ax.set_xlim(
-        dateutil.parser.parse(months[ 0]).replace(day=1)
-            - datetime.timedelta(days=20),
-        dateutil.parser.parse(months[-1]).replace(day=1)
-            + datetime.timedelta(days=20))
+        qubesstats.parse_date(months[ 0]) - datetime.timedelta(days=20),
+        qubesstats.parse_date(months[-1]) + datetime.timedelta(days=20))
 
     ax.set_ylabel('Unique IP addresses')
 
@@ -138,12 +136,9 @@ def main():
         data_tor = []
         for month, mdata in sorted(stats.items()):
             if version in mdata:
-                data_plain.append((
-                    dateutil.parser.parse(month).replace(day=1) + offset,
-                    mdata[version]['plain']))
-                data_tor.append((
-                    dateutil.parser.parse(month).replace(day=1) + offset,
-                    mdata[version]['tor']))
+                timestamp = qubesstats.parse_date(month) + offset
+                data_plain.append((timestamp, mdata[version]['plain']))
+                data_tor.append((timestamp, mdata[version]['tor']))
 
         ax.bar(*zip(*data_tor), hatch='////',
             color=COLOURS.get(version, '#ff0000'), #TANGO['ScarletRed1']),
@@ -158,9 +153,7 @@ def main():
 
     data = []
     for month, mdata in sorted(stats.items()):
-        data.append((
-            dateutil.parser.parse(month).replace(day=1),
-            sum(mdata['any'].values())))
+        data.append((qubesstats.parse_date(month), sum(mdata['any'].values())))
     line, = ax.plot(*zip(*data[:-1]), label='any', color='#e79e27', linewidth=3)
     handles.append(line)
 #   ax.plot(*zip(*data[-2:]), label='any', color='#e79e27', linewidth=3,

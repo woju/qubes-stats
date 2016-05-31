@@ -23,6 +23,7 @@ from __future__ import print_function
 import argparse
 import collections
 import datetime
+import functools
 import json
 import logging
 import logging.handlers
@@ -59,6 +60,10 @@ SYSLOG_TRY_SOCKETS = [
 ]
 
 CACHEDIR = '/tmp'
+
+DEFAULT_DATE = datetime.datetime.now().replace(
+    day=1, hour=0, minute=0, second=0, microsecond=0)
+parse_date = functools.partial(dateutil.parser.parse, default=DEFAULT_DATE)
 
 logging.addLevelName(25, 'NOTICE')
 

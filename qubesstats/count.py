@@ -48,7 +48,7 @@ group_month.add_argument('--last-month',
     action='store_true', default=False,
     help='process last month')
 group_month.add_argument('--month', metavar='YYYY-MM',
-    type=dateutil.parser.parse,
+    type=qubesstats.parse_date,
     help='process this specific month')
 
 parser.add_argument('logfiles', metavar='LOGFILE',
