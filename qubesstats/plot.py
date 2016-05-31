@@ -148,6 +148,7 @@ class Graph(object):
         self.ax.xaxis.set_major_formatter(x_major_formatter)
         self.ax.yaxis.set_major_formatter(y_major_formatter)
         self.ax.tick_params(labelsize='small')
+        self.ax.tick_params(axis='x', length=0)
 
         padding = datetime.timedelta(days=20)
         self.ax.set_xlim(
