@@ -113,7 +113,7 @@ class DownloadRecord(str):
         m = self.re_request_uri.search(line)
         if not m:
             raise ValueError('URI not found in {!r}'.format(self))
-        self.path = m.group(1)
+        self.path = urllib.unquote(m.group(1))
 
         if not self.path.endswith('repomd.xml'):
             raise ValueError('Not a repomd.xml')
@@ -124,12 +124,16 @@ class DownloadRecord(str):
         self.address = m.group(2)
 
         path_tokens = self.path.lstrip('/').split('/')
+        if path_tokens[0][0] == '~':
+            raise ValueError(
+                'personal repo ({!r}), not counting'.format(path_tokens[0]))
         while path_tokens[0] in ('repo', 'yum'):
             path_tokens.pop(0)
         self.release = path_tokens[0]
 
         self.timestamp = datetime.datetime.strptime(
             self.timestamp, '%d/%b/%Y:%H:%M:%S')
+
 
 class ExitNodeAddress(list):
     def register(self, descriptor):
