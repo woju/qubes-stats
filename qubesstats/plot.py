@@ -60,31 +60,23 @@ x_major_locator = matplotlib.dates.MonthLocator()
 x_major_formatter = matplotlib.dates.DateFormatter('%Y-%m')
 y_major_formatter = matplotlib.ticker.ScalarFormatter()
 
-#TANGO = {
-#    'Aluminium1': '#2e3436',
-#    'ScarletRed1': '#a40000',
-#    'ScarletRed2': '#cc0000',
-#    'Plum1': '#5c3566',
-#    'SkyBlue1': '#204a87',
-#    'Chameleon1': '#4e9a06',
-#}
-#
-#COLOURS = {
-#    'r1': TANGO['Aluminium1'],
-#    'r2': TANGO['Plum1'],
-#    'r2-beta2': TANGO['Aluminium1'],
-#    'r2-beta3': TANGO['Aluminium1'],
-#    'r3.0': TANGO['Chameleon1'],
-#    'r3.1': TANGO['SkyBlue1'],
-#}
+QUBES_PALETTE = {
+    'black':    '#333333',
+    'red':      '#bd2727',
+    'orange':   '#e79e27',
+    'yellow':   '#e7e532',
+    'green':    '#5ad840',
+    'blue':     '#3874d8',
+    'purple':   '#9f389f',
+}
 
 COLOURS = {
-    'r1': '#666666',
-    'r2': '#9f389f',
-    'r2-beta2': '#666666',
-    'r2-beta3': '#666666',
-    'r3.0': '#5ad840',
-    'r3.1': '#63a0ff',
+    'r1':   QUBES_PALETTE['red'],
+    'r2':   QUBES_PALETTE['orange'],
+    # skip yellow, since it is somewhat too bright
+    'r3.0': QUBES_PALETTE['green'],
+    'r3.1': QUBES_PALETTE['blue'],
+    'r3.2': QUBES_PALETTE['purple'],
 }
 
 class LoadedStats(dict):
