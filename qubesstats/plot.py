@@ -127,7 +127,7 @@ class Graph(object):
 
         self.fig = matplotlib.pyplot.figure(
             figsize=(240 * MM, 160 * MM), dpi=DPI)
-        self.ax = self.fig.add_axes((.12, .12, .85, .80))
+        self.ax = self.fig.add_axes((.10, .15, .85, .80))
 
         self.handles = []
 
@@ -178,6 +178,9 @@ class Graph(object):
                 bottom = tuple(bottom[i] + sdata[i] for i in range(len(bottom)))
 
     def setup_text(self):
+        plt.setp(self.ax.get_xticklabels(), rotation=45)
+            #horizontalalignment='right', verticalalignment='top')
+
         self.fig.text(0.02, 0.02,
             'last updated: {meta[last-updated]}\n{meta[source]}'.format(
                 meta=self.stats.meta),
@@ -200,8 +203,6 @@ class Graph(object):
         self.fig.savefig(output + '.png', format='png')
         self.fig.savefig(output + '.svg', format='svg')
         plt.close()
-
-
 
 
 def main():
