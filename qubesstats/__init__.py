@@ -206,16 +206,10 @@ class QubesCounter(dict):
         except IOError:
             logging.log(25, 'loading exit node list failed')
             self.fetch_exit_cache()
-            self.save_exit_cache()
 
     def load_exit_cache(self):
         logging.log(25, 'loading exit node list')
         self.exit_cache = pickle.load(open(self.exit_cache_file))
-
-    def save_exit_cache(self):
-        logging.log(25, 'saving exit node list')
-        pickle.dump(self.exit_cache,
-            open(self.exit_cache_file, 'wb'), pickle.HIGHEST_PROTOCOL)
 
     def fetch_exit_cache(self):
         logging.log(25, 'downloading exit node list')
@@ -223,11 +217,13 @@ class QubesCounter(dict):
         tmpfile.write(lzma.decompress(urllib.urlopen(
             EXIT_LIST_URI.format(timestamp=self.timestamp)).read()))
         tmpfile.flush()
+        self.bake_exit_cache([tmpfile.name])
 
+    def bake_exit_cache(self, paths):
         logging.log(25, 'parsing exit node list')
         n_desc = 0
         n_addr = 0
-        with stem.descriptor.reader.DescriptorReader([tmpfile.name]) as reader:
+        with stem.descriptor.reader.DescriptorReader(paths) as reader:
             for descriptor in reader:
                 n_desc += 1
                 for address in descriptor.exit_addresses:
@@ -238,6 +234,10 @@ class QubesCounter(dict):
 
         for cache in self.exit_cache.itervalues():
             cache.compact()
+
+        logging.log(25, 'saving exit node list')
+        pickle.dump(self.exit_cache,
+            open(self.exit_cache_file, 'wb'), pickle.HIGHEST_PROTOCOL)
 
     def was_exit(self, record):
         # avoid instantiating new object

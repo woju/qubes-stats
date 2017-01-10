@@ -24,6 +24,7 @@ if __name__ == '__main__':
             'console_scripts': [
                 'stats-count = qubesstats.count:main',
                 'stats-plot = qubesstats.plot:main',
+                'stats-bake-cache = qubesstats.bake:main',
             ]
         }
     )
