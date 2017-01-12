@@ -32,6 +32,9 @@ import qubesstats
 
 parser = argparse.ArgumentParser()
 
+parser.add_argument('--force-descriptor-type', metavar='TYPE',
+    action='store', default=None,
+    help='force descriptor type (to work around tor#21195)')
 parser.add_argument('month', metavar='YYYY-MM',
     type=qubesstats.parse_date,
     help='process this specific month')
@@ -42,6 +45,8 @@ parser.add_argument('exit_list', metavar='PATH',
 def main():
     qubesstats.setup_logging()
     args = parser.parse_args()
+    if args.force_descriptor_type:
+        qubesstats.EXIT_DESCRIPTOR_TYPE = args.force_descriptor_type
     counter = qubesstats.QubesCounter(args.month.year, args.month.month)
     counter.bake_exit_cache(args.exit_list)
 

@@ -54,6 +54,8 @@ EXIT_LIST_URI = 'https://collector.torproject.org/archive/exit-lists/' \
 
 EXIT_DESCRIPTOR_TOLERANCE = 24 # hours
 
+EXIT_DESCRIPTOR_TYPE = None
+
 SYSLOG_TRY_SOCKETS = [
     '/var/run/log', # FreeBSD
     '/dev/log',     # Linux
@@ -223,7 +225,8 @@ class QubesCounter(dict):
         logging.log(25, 'parsing exit node list')
         n_desc = 0
         n_addr = 0
-        with stem.descriptor.reader.DescriptorReader(paths) as reader:
+        with stem.descriptor.reader.DescriptorReader(
+                paths, descriptor_type=EXIT_DESCRIPTOR_TYPE) as reader:
             for descriptor in reader:
                 n_desc += 1
                 for address in descriptor.exit_addresses:
