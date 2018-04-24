@@ -43,7 +43,7 @@ import qubesstats
 MM = 1 / 25.4
 DPI = 300.0
 
-BAR_WIDTH = 25.0  # days on X axis
+BAR_WIDTH = 31.0  # days on X axis
 
 parser = argparse.ArgumentParser()
 
@@ -56,7 +56,7 @@ parser.add_argument('--output', metavar='PATH',
     default=os.path.expanduser('~/public_html/counter/stats'),
     help='location of the output files (default: %(default)s)')
 
-x_major_locator = matplotlib.dates.MonthLocator()
+x_major_locator = matplotlib.dates.MonthLocator(bymonth=[1, 4, 7, 10])
 x_major_formatter = matplotlib.dates.DateFormatter('%Y-%m')
 y_major_formatter = matplotlib.ticker.ScalarFormatter()
 
@@ -77,6 +77,8 @@ COLOURS = {
     'r3.0': QUBES_PALETTE['green'],
     'r3.1': QUBES_PALETTE['blue'],
     'r3.2': QUBES_PALETTE['purple'],
+    'r4.0': QUBES_PALETTE['red'],
+    'r4.1': QUBES_PALETTE['orange'],
 }
 
 class LoadedStats(dict):
@@ -127,7 +129,7 @@ class Graph(object):
 
         self.fig = matplotlib.pyplot.figure(
             figsize=(240 * MM, 160 * MM), dpi=DPI)
-        self.ax = self.fig.add_axes((.10, .15, .85, .80))
+        self.ax = self.fig.add_axes((.10, .12, .85, .80))
 
         self.handles = []
 
@@ -143,23 +145,21 @@ class Graph(object):
         self.ax.tick_params(axis='x', length=0)
 
         padding = datetime.timedelta(days=20)
+        now = qubesstats.parse_date(self.stats.months[-1])
         self.ax.set_xlim(
-            qubesstats.parse_date(self.stats.months[ 0]) - padding,
-            qubesstats.parse_date(self.stats.months[-1]) + padding)
+            now.replace(year=now.year-3) - padding,
+            now + padding)
 
         self.ax.set_ylabel('Unique IP addresses')
 
         for spine in ('top', 'bottom', 'left', 'right'):
             self.ax.spines[spine].set_linewidth(0.5)
 
-#       ax.set_xlim
         self.ax.yaxis.grid(True, which='major', linestyle=':', alpha=0.7)
 
     def add_data(self):
         bottom = (0,) * len(self.stats)
-        offset = datetime.timedelta(days=BAR_WIDTH * 0.5)
-        months = tuple(qubesstats.parse_date(i) - offset
-            for i in self.stats.months)
+        months = tuple(qubesstats.parse_date(i) for i in self.stats.months)
         for release in self.stats.releases:
             for series in ('tor', 'plain'):
                 sdata = tuple(self.stats.get_series(release, series))
@@ -178,9 +178,6 @@ class Graph(object):
                 bottom = tuple(bottom[i] + sdata[i] for i in range(len(bottom)))
 
     def setup_text(self):
-        plt.setp(self.ax.get_xticklabels(), rotation=45)
-            #horizontalalignment='right', verticalalignment='top')
-
         self.fig.text(0.02, 0.02,
             'last updated: {meta[last-updated]}\n{meta[source]}'.format(
                 meta=self.stats.meta),
