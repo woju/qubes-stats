@@ -23,6 +23,7 @@ from __future__ import absolute_import, print_function
 import argparse
 import datetime
 import distutils.version
+import itertools
 import json
 import logging
 import logging.handlers
@@ -70,16 +71,8 @@ QUBES_PALETTE = {
     'purple':   '#9f389f',
 }
 
-COLOURS = {
-    'r1':   QUBES_PALETTE['red'],
-    'r2':   QUBES_PALETTE['orange'],
-    # skip yellow, since it is somewhat too bright
-    'r3.0': QUBES_PALETTE['green'],
-    'r3.1': QUBES_PALETTE['blue'],
-    'r3.2': QUBES_PALETTE['purple'],
-    'r4.0': QUBES_PALETTE['red'],
-    'r4.1': QUBES_PALETTE['orange'],
-}
+
+COLOURS = ['purple', 'orange', 'green', 'blue']
 
 class LoadedStats(dict):
     def __init__(self, datafile):
@@ -160,7 +153,10 @@ class Graph(object):
     def add_data(self):
         bottom = (0,) * len(self.stats)
         months = tuple(qubesstats.parse_date(i) for i in self.stats.months)
+        colours = itertools.cycle(QUBES_PALETTE[i] for i in COLOURS)
+
         for release in self.stats.releases:
+            colour = next(colours)
             for series in ('tor', 'plain'):
                 sdata = tuple(self.stats.get_series(release, series))
                 handle = self.ax.bar(
@@ -169,7 +165,7 @@ class Graph(object):
                     bottom=bottom,
                     hatch=('///' if series == 'tor' else None),
                     label=(release if series == 'plain' else None),
-                    color=COLOURS.get(release, '#ff0000'), #TANGO['ScarletRed1']
+                    color=colour,
                     width=BAR_WIDTH,
                     linewidth=0.5)
                 if series == 'plain':
