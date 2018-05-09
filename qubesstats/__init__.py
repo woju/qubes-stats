@@ -167,19 +167,29 @@ class ExitNodeAddress(list):
 
 
 class Release(object):
-    keys = ('plain', 'tor')
-
     def __init__(self, counter):
         self.counter = counter
-        for key in self.keys:
-            setattr(self, key, set())
+        self._set_plain = set()
+        self._req_plain = 0
+        self._req_tor = 0
+
+    plain = property(lambda self: len(self._set_plain))
+
+    # Proportion between number of users and number of requests should be
+    # approximately constant. However, Tor hides users behind exit nodes.
+    # Therefore, for Tor we count requests and normalise them against users
+    # who used plain HTTPS.
+    tor = property(lambda self: self._req_tor * self.plain / self._req_plain)
 
     def count(self, record):
         if self.counter.was_exit(record):
-            self.tor.add(record.address)
+            self._req_tor += 1
         else:
-            self.plain.add(record.address)
+            self._set_plain.add(record.address)
+            self._req_plain += 1
 
+    def asdict(self):
+        return {'plain': self.plain, 'tor': self.tor}
 
 class QubesCounter(dict):
     release_class = Release
@@ -269,8 +279,7 @@ class QubesCounter(dict):
 class QubesJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, Release):
-            return dict((key, len(getattr(o, key))) for key in o.keys) # no ()
-        # this will probably raise TypeError
+            return o.asdict()
         return super(QubesJSONEncoder, self).default(o)
 
     def dump(self, o, stream):
