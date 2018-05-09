@@ -128,6 +128,7 @@ class Graph(object):
 
         self.setup_ax()
         self.add_data()
+        self.add_annotations()
         self.setup_text()
 
     def setup_ax(self):
@@ -173,6 +174,11 @@ class Graph(object):
 
                 bottom = tuple(bottom[i] + sdata[i] for i in range(len(bottom)))
 
+    def add_annotations(self):
+        # methodology change
+        self.ax.axvline(datetime.datetime(2018, 3, 15, 0, 0, 0),
+            color='#ef2929', linewidth=2)
+
     def setup_text(self):
         self.fig.text(0.02, 0.02,
             'last updated: {meta[last-updated]}\n{meta[source]}'.format(
@@ -180,7 +186,8 @@ class Graph(object):
             size='x-small', alpha=0.5)
         self.fig.text(0.98, 0.02,
             'Stats are based on counting the number of unique IPs\n'
-            'connecting to the Qubes updates server each month.',
+            'connecting to the Qubes updates server each month.\n'
+            'Red line: methodology of counting Tor users has changed.',
             size='x-small', alpha=0.5, ha='right')
 
         self.handles.append(matplotlib.patches.Patch(
