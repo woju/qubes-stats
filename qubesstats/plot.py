@@ -21,6 +21,7 @@
 from __future__ import absolute_import, print_function
 
 import argparse
+import collections
 import datetime
 import distutils.version
 import itertools
@@ -61,18 +62,20 @@ x_major_locator = matplotlib.dates.MonthLocator(bymonth=[1, 4, 7, 10])
 x_major_formatter = matplotlib.dates.DateFormatter('%Y-%m')
 y_major_formatter = matplotlib.ticker.ScalarFormatter()
 
-QUBES_PALETTE = {
-    'black':    '#333333',
-    'red':      '#bd2727',
-    'orange':   '#e79e27',
-    'yellow':   '#e7e532',
-    'green':    '#5ad840',
-    'blue':     '#3874d8',
-    'purple':   '#9f389f',
-}
+Colour = collections.namedtuple('Colour', (
+    'plain', 'tor', 'current_plain', 'current_tor'))
 
+class Hue(tuple):
+    def get_colour(self, series, is_current=False):
+        return self[int(series == 'plain') + int(bool(is_current))]
 
-COLOURS = ['purple', 'orange', 'green', 'blue']
+COLOURS = [
+    # http://tango.freedesktop.org/Tango_Icon_Theme_Guidelines
+    Hue(('#5c3566', '#75507b', '#ad7fa8')),  # Plum
+    Hue(('#ce5c00', '#f57900', '#fcaf3e')),  # Orange
+    Hue(('#4e9a06', '#73d216', '#8ae234')),  # Chameleon
+    Hue(('#204a87', '#3465a4', '#729fcf')),  # SkyBlue
+]
 
 class LoadedStats(dict):
     def __init__(self, datafile):
@@ -154,24 +157,33 @@ class Graph(object):
     def add_data(self):
         bottom = (0,) * len(self.stats)
         months = tuple(qubesstats.parse_date(i) for i in self.stats.months)
-        colours = itertools.cycle(QUBES_PALETTE[i] for i in COLOURS)
+        colours = itertools.cycle(COLOURS)
 
         for release in self.stats.releases:
-            colour = next(colours)
+            hue = next(colours)
             for series in ('tor', 'plain'):
                 sdata = tuple(self.stats.get_series(release, series))
+
+                # current month
+                self.ax.bar(
+                    months[-1:],
+                    sdata[-1:],
+                    bottom=bottom[-1:],
+                    label=None,
+                    color=hue.get_colour(series, True),
+                    width=BAR_WIDTH,
+                    linewidth=0.5)
+
                 handle = self.ax.bar(
-                    months,
-                    sdata,
-                    bottom=bottom,
-                    hatch=('///' if series == 'tor' else None),
+                    months[:-1],
+                    sdata[:-1],
+                    bottom=bottom[:-1],
                     label=(release if series == 'plain' else None),
-                    color=colour,
+                    color=hue.get_colour(series, False),
                     width=BAR_WIDTH,
                     linewidth=0.5)
                 if series == 'plain':
                     self.handles.append(handle)
-
                 bottom = tuple(bottom[i] + sdata[i] for i in range(len(bottom)))
 
     def add_annotations(self):
@@ -191,7 +203,7 @@ class Graph(object):
             size='x-small', alpha=0.5, ha='right')
 
         self.handles.append(matplotlib.patches.Patch(
-            facecolor='white', hatch='///', label='Tor', linewidth=0.5))
+            facecolor='#888a85', label='Tor'))
 
         legend = plt.legend(
             loc=2, ncol=2, prop={'size': 8}, handles=self.handles)
