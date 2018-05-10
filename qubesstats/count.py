@@ -99,8 +99,12 @@ def main():
     data['meta'] = {
         'title': 'Estimated Qubes OS userbase',
         'last-updated': datetime.datetime.now().strftime('%d.%m.%Y %H:%M'),
-        'comment': 'Stats are based on counting the number of unique IPs'
-            ' connecting to the Qubes update server each month.',
+        'comment':
+            'Estimate is based on counting the number of unique IPs '
+            'connecting to the Qubes update server each month. '
+            'Current month is not reliable.'
+            'The methodology of counting Tor users changed on April 2018.'
+            ,
         'source': 'https://github.com/woju/qubes-stats',
     }
     fh.seek(0)

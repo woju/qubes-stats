@@ -197,8 +197,10 @@ class Graph(object):
                 meta=self.stats.meta),
             size='x-small', alpha=0.5)
         self.fig.text(0.98, 0.02,
-            'Stats are based on counting the number of unique IPs\n'
+            'Estimate is based on counting the number of unique IPs '
             'connecting to the Qubes updates server each month.\n'
+            'Because of accumulating nature of the estimate, current month '
+            '(lighter bar) will continue to raise until next month.\n'
             'Red line: methodology of counting Tor users has changed.',
             size='x-small', alpha=0.5, ha='right')
 
