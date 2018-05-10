@@ -5,7 +5,7 @@ import setuptools
 if __name__ == '__main__':
     setuptools.setup(
         name='qubes-stats',
-        version='1.0',
+        version='2.0',
         author='Invisible Things Lab',
         author_email='woju@invisiblethingslab.com',
         description='TOR-aware distribution statistics',
