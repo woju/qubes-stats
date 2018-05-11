@@ -39,6 +39,8 @@ import matplotlib.pyplot as plt
 import matplotlib.dates
 import matplotlib.ticker
 
+import numpy as np
+
 import qubesstats
 
 
@@ -93,41 +95,30 @@ class LoadedStats(dict):
         self.releases = list(sorted(releases,
             key=distutils.version.LooseVersion))
 
-        for month in stats:
-            if month not in self:
-                self[month] = {}
+        months = sorted(stats)
+        self.months = np.array(map(qubesstats.parse_date, months))
 
+        for i, month in enumerate(months):
             for release in self.releases:
                 for key in stats[month]:
                     if not key == release or key.startswith(release + '-'):
                         continue
-                    if release not in self:
-                        self[month][release] = stats[month][release]
-                    else:
-                        for series, sdata in stats[month][key].items():
-                            self[month][release][series] += sdata
+                    for series, sdata in stats[month][key].items():
+                        self[release, series][i] += sdata
 
-    @property
-    def months(self):
-        return sorted(self)
-
-    def get_series(self, release, series):
-        for month in self.months:
-            try:
-                yield self[month][release][series]
-            except KeyError:
-                yield 0
-
+    def __missing__(self, key):
+        self[key] = np.zeros(self.months.size)
+        return self[key]
 
 class Graph(object):
     def __init__(self, stats):
         self.stats = stats
+        self.now = self.stats.months[-1]
+        self.x_min = self.now.replace(year=self.now.year-3)
 
         self.fig = matplotlib.pyplot.figure(
             figsize=(240 * MM, 160 * MM), dpi=DPI)
         self.ax = self.fig.add_axes((.10, .12, .85, .80))
-
-        self.handles = []
 
         self.setup_ax()
         self.add_data()
@@ -142,10 +133,7 @@ class Graph(object):
         self.ax.tick_params(axis='x', length=0)
 
         padding = datetime.timedelta(days=20)
-        now = qubesstats.parse_date(self.stats.months[-1])
-        self.ax.set_xlim(
-            now.replace(year=now.year-3) - padding,
-            now + padding)
+        self.ax.set_xlim(self.x_min - padding, self.now + padding)
 
         self.ax.set_ylabel('Unique IP addresses')
 
@@ -154,19 +142,53 @@ class Graph(object):
 
         self.ax.yaxis.grid(True, which='major', linestyle=':', alpha=0.7)
 
+    def find_label_placement(self, release_cur):
+        sdata_cur_plain = self.stats[release_cur, 'plain']
+        sdata_cur_tor = self.stats[release_cur, 'tor']
+
+        try:
+            release_next = self.stats.releases[
+                self.stats.releases.index(release_cur) + 1]
+            sdata_next_plain = self.stats[release_next, 'plain']
+            sdata_next_tor = self.stats[release_next, 'tor']
+        except LookupError:
+            # last release
+            sdata_next_plain = np.zeros(sdata_cur_plain.size, dtype=np.int)
+            sdata_next_tor = sdata_next_plain
+
+        sdata_diff = ((sdata_next_plain + sdata_next_tor)
+                    - (sdata_cur_plain + sdata_cur_tor))
+
+        # [:-1] is not to label current month
+        for i, diff in reversed(list(enumerate(sdata_diff[:-1]))):
+            if diff < 0:
+                return i, sdata_cur_plain[i] / 2.0
+
+        # Loop didn't return. This means we have been long overtaken by next
+        # version. So no label.
+        return None, 0
+
     def add_data(self):
-        bottom = (0,) * len(self.stats)
-        months = tuple(qubesstats.parse_date(i) for i in self.stats.months)
+        bottom = np.zeros(self.stats.months.size)
         colours = itertools.cycle(COLOURS)
 
         for release in self.stats.releases:
             hue = next(colours)
             for series in ('tor', 'plain'):
-                sdata = tuple(self.stats.get_series(release, series))
+                sdata = self.stats[release, series]
+
+                self.ax.bar(
+                    self.stats.months[:-1],
+                    sdata[:-1],
+                    bottom=bottom[:-1],
+                    label=(release if series == 'plain' else None),
+                    color=hue.get_colour(series, False),
+                    width=BAR_WIDTH,
+                    linewidth=0.5)
 
                 # current month
                 self.ax.bar(
-                    months[-1:],
+                    self.stats.months[-1:],
                     sdata[-1:],
                     bottom=bottom[-1:],
                     label=None,
@@ -174,22 +196,21 @@ class Graph(object):
                     width=BAR_WIDTH,
                     linewidth=0.5)
 
-                handle = self.ax.bar(
-                    months[:-1],
-                    sdata[:-1],
-                    bottom=bottom[:-1],
-                    label=(release if series == 'plain' else None),
-                    color=hue.get_colour(series, False),
-                    width=BAR_WIDTH,
-                    linewidth=0.5)
-                if series == 'plain':
-                    self.handles.append(handle)
-                bottom = tuple(bottom[i] + sdata[i] for i in range(len(bottom)))
+                bottom += sdata
+
+            i, y_offset = self.find_label_placement(release)
+            if i is not None and self.stats.months[i] >= self.x_min:
+                self.ax.text(self.stats.months[i], bottom[i] - y_offset,
+                    release, horizontalalignment='right',
+                    bbox={'facecolor': '#ffffff'})
 
     def add_annotations(self):
         # methodology change
         self.ax.axvline(datetime.datetime(2018, 3, 15, 0, 0, 0),
             color='#ef2929', linewidth=2)
+        self.ax.text(0.02, 0.98, 'shaded areas are Tor users',
+                bbox={'facecolor': '#ffffff'},
+                transform=self.ax.transAxes, verticalalignment='top')
 
     def setup_text(self):
         self.fig.text(0.02, 0.02,
@@ -203,13 +224,6 @@ class Graph(object):
             '(lighter bar) will continue to raise until next month.\n'
             'Red line: methodology of counting Tor users has changed.',
             size='x-small', alpha=0.5, ha='right')
-
-        self.handles.append(matplotlib.patches.Patch(
-            facecolor='#888a85', label='Tor'))
-
-        legend = plt.legend(
-            loc=2, ncol=2, prop={'size': 8}, handles=self.handles)
-        legend.get_frame().set_linewidth(0.5)
 
         plt.title(self.stats.meta['title'])
 
