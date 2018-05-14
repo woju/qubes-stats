@@ -67,6 +67,8 @@ DEFAULT_DATE = datetime.datetime.now().replace(
     day=1, hour=0, minute=0, second=0, microsecond=0)
 parse_date = functools.partial(dateutil.parser.parse, default=DEFAULT_DATE)
 
+TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
+
 logging.addLevelName(25, 'NOTICE')
 
 class BetterSysLogHandler(logging.handlers.SysLogHandler):

@@ -84,6 +84,9 @@ class LoadedStats(dict):
         stats = json.load(open(datafile))
         self.meta = stats['meta']
         del stats['meta']
+        if 'last-updated' in self.meta:
+            self.meta['last-updated'] = datetime.datetime.strptime(
+                self.meta['last-updated'], qubesstats.TIMESTAMP_FORMAT)
 
         logging.log(25, 'loaded datafile %r, last updated %r',
             datafile, self.meta['last-updated'])
@@ -214,14 +217,10 @@ class Graph(object):
 
     def setup_text(self):
         self.fig.text(0.02, 0.02,
-            'last updated: {meta[last-updated]}\n{meta[source]}'.format(
-                meta=self.stats.meta),
+            'last updated: {meta[last-updated]:%Y-%m-%d %H:%M UTC}\n'
+            '{meta[source]}'.format(meta=self.stats.meta),
             size='x-small', alpha=0.5)
         self.fig.text(0.98, 0.02,
-            'Estimate is based on counting the number of unique IPs '
-            'connecting to the Qubes updates server each month.\n'
-            'Because of accumulating nature of the estimate, current month '
-            '(lighter bar) will continue to raise until next month.\n'
             'Red line: methodology of counting Tor users has changed.',
             size='x-small', alpha=0.5, ha='right')
 
