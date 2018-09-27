@@ -44,9 +44,8 @@ import dateutil.parser
 import stem.descriptor.reader
 
 LOGFILES = [
-    '/var/log/httpd-access.log',
-    '/var/log/httpd-access.log.0',
-    '/var/log/httpd-access.log.1',
+    '/var/log/nginx/access.log',
+    '/var/log/nginx/access.log.1',
 ]
 
 EXIT_LIST_URI = 'https://collector.torproject.org/archive/exit-lists/' \
@@ -124,7 +123,8 @@ class DownloadRecord(str):
             raise ValueError('URI not found in {!r}'.format(self))
         self.path = urllib.unquote(m.group(1))
 
-        if not self.path.endswith('repomd.xml'):
+        if not self.path.endswith('repomd.xml') \
+                and not self.path.endswith('repomd.xml.metalink'):
             raise ValueError('Not a repomd.xml')
 
         m = self.re_address.search(line)
