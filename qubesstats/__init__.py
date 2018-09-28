@@ -46,6 +46,7 @@ import stem.descriptor.reader
 LOGFILES = [
     '/var/log/nginx/access.log',
     '/var/log/nginx/access.log.1',
+    '/var/log/nginx/access.log.2',
 ]
 
 EXIT_LIST_URI = 'https://collector.torproject.org/archive/exit-lists/' \
