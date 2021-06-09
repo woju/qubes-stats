@@ -42,7 +42,7 @@ parser.add_argument('--force-fetch',
 
 parser.add_argument('--force-descriptor-type', metavar='TYPE',
     action='store', default=None,
-    help='force descriptor type (to work around tor#21195)')
+    help='ignored for compatibility')
 
 group_month = parser.add_mutually_exclusive_group(required=True)
 group_month.add_argument('--current-month',
@@ -63,9 +63,6 @@ parser.add_argument('logfiles', metavar='LOGFILE',
 def main():
     qubesstats.setup_logging()
     args = parser.parse_args()
-
-    if args.force_descriptor_type:
-        qubesstats.EXIT_DESCRIPTOR_TYPE = args.force_descriptor_type
 
     if args.current_month:
         month = datetime.date.today()
