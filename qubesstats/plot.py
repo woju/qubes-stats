@@ -208,9 +208,6 @@ class Graph(object):
                     bbox={'facecolor': '#ffffff'})
 
     def add_annotations(self):
-        # methodology change
-        self.ax.axvline(datetime.datetime(2018, 3, 15, 0, 0, 0),
-            color='#ef2929', linewidth=2)
         self.ax.text(0.02, 0.98, 'shaded areas are Tor users',
                 bbox={'facecolor': '#ffffff'},
                 transform=self.ax.transAxes, verticalalignment='top')
@@ -220,9 +217,6 @@ class Graph(object):
             'last updated: {meta[last-updated]:%Y-%m-%d %H:%M UTC}\n'
             '{meta[source]}'.format(meta=self.stats.meta),
             size='x-small', alpha=0.5)
-        self.fig.text(0.98, 0.02,
-            'Red line: methodology of counting Tor users has changed.',
-            size='x-small', alpha=0.5, ha='right')
 
         plt.title(self.stats.meta['title'])
 
