@@ -1,8 +1,8 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 #
 # Statistics aggregator for Qubes OS infrastructure.
-# Copyright (C) 2015-2016  Wojtek Porczyk <woju@invisiblethingslab.com>
+# Copyright (C) 2015-2021  Wojtek Porczyk <woju@invisiblethingslab.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,8 +18,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import print_function
-
 import argparse
 import collections
 import datetime
@@ -29,16 +27,13 @@ import logging
 import logging.handlers
 import lzma
 import os
+import pathlib
+import pickle
 import re
 import stat
 import sys
 import tempfile
 import urllib
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
 
 import dateutil.parser
 import stem.descriptor.reader
@@ -49,8 +44,8 @@ LOGFILES = [
     '/var/log/nginx/access.log.2',
 ]
 
-EXIT_LIST_URI = 'https://collector.torproject.org/archive/exit-lists/' \
-    'exit-list-{timestamp}.tar.xz'
+EXIT_LIST_URI = ('https://collector.torproject.org/archive/exit-lists/'
+    'exit-list-{timestamp}.tar.xz')
 
 EXIT_DESCRIPTOR_TOLERANCE = 24 # hours
 
@@ -61,7 +56,7 @@ SYSLOG_TRY_SOCKETS = [
     '/dev/log',     # Linux
 ]
 
-CACHEDIR = '/tmp'
+CACHEDIR = pathlib.Path('/tmp')
 
 DEFAULT_DATE = datetime.datetime.now().replace(
     day=1, hour=0, minute=0, second=0, microsecond=0)
@@ -208,12 +203,11 @@ class QubesCounter(dict):
 
     @property
     def exit_cache_file(self):
-        return os.path.join(
-            CACHEDIR, 'exit_cache-{}.pickle'.format(self.timestamp))
+        return CACHEDIR / f'exit_cache-{self.timestamp}.pickle'
 
     @property
     def timestamp(self):
-        return '{:04d}-{:02d}'.format(self.year, self.month)
+        return f'{self.year:04d}-{self.month:02d}'
 
     def load_or_fetch_exit_cache(self):
         try:

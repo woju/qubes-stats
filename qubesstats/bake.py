@@ -2,7 +2,7 @@
 
 #
 # Statistics aggregator for Qubes OS infrastructure.
-# Copyright (C) 2015-2016  Wojtek Porczyk <woju@invisiblethingslab.com>
+# Copyright (C) 2015-2021  Wojtek Porczyk <woju@invisiblethingslab.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,17 +18,14 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import absolute_import, print_function
-
 import argparse
-import datetime
-import json
-import logging
-import os
-
 import dateutil
 
-import qubesstats
+from . import (
+    QubesCounter,
+    parse_date,
+    setup_logging,
+)
 
 parser = argparse.ArgumentParser()
 
@@ -36,16 +33,16 @@ parser.add_argument('--force-descriptor-type', metavar='TYPE',
     action='store', default=None,
     help='ignored for compatibility')
 parser.add_argument('month', metavar='YYYY-MM',
-    type=qubesstats.parse_date,
+    type=parse_date,
     help='process this specific month')
 parser.add_argument('exit_list', metavar='PATH',
     nargs='*', default=['.'],
     help='location of the exit list directories (default: %(default)r)')
 
 def main():
-    qubesstats.setup_logging()
+    setup_logging()
     args = parser.parse_args()
-    counter = qubesstats.QubesCounter(args.month.year, args.month.month)
+    counter = QubesCounter(args.month.year, args.month.month)
     counter.bake_exit_cache(args.exit_list)
 
 if __name__ == '__main__':

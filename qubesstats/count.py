@@ -1,8 +1,8 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 #
 # Statistics aggregator for Qubes OS infrastructure.
-# Copyright (C) 2015-2016  Wojtek Porczyk <woju@invisiblethingslab.com>
+# Copyright (C) 2015-2021  Wojtek Porczyk <woju@invisiblethingslab.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,17 +18,20 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import absolute_import, print_function
-
 import argparse
 import datetime
 import json
 import logging
 import os
 
-import dateutil
-
-import qubesstats
+from . import (
+    LOGFILES,
+    QubesCounter,
+    QubesJSONEncoder,
+    TIMESTAMP_FORMAT,
+    parse_date,
+    setup_logging,
+)
 
 parser = argparse.ArgumentParser()
 
@@ -52,16 +55,16 @@ group_month.add_argument('--last-month',
     action='store_true', default=False,
     help='process last month')
 group_month.add_argument('--month', metavar='YYYY-MM',
-    type=qubesstats.parse_date,
+    type=parse_date,
     help='process this specific month')
 
 parser.add_argument('logfiles', metavar='LOGFILE',
-    nargs='*', default=qubesstats.LOGFILES,
+    nargs='*', default=LOGFILES,
     help='process these logfiles instead of the default set')
 
 
 def main():
-    qubesstats.setup_logging()
+    setup_logging()
     args = parser.parse_args()
 
     if args.current_month:
@@ -71,7 +74,7 @@ def main():
     else:
         month = args.month
 
-    counter = qubesstats.QubesCounter(month.year, month.month)
+    counter = QubesCounter(month.year, month.month)
 
     if args.force_fetch or args.current_month:
         counter.fetch_exit_cache()
@@ -96,14 +99,14 @@ def main():
     data['meta'] = {
         'title': 'Estimated Qubes OS userbase',
         'last-updated':
-            datetime.datetime.utcnow().strftime(qubesstats.TIMESTAMP_FORMAT),
+            datetime.datetime.utcnow().strftime(TIMESTAMP_FORMAT),
         'comment':
             'Current month is not reliable. '
             'The methodology of counting Tor users changed on April 2018.',
         'source': 'https://github.com/woju/qubes-stats',
     }
     fh.seek(0)
-    qubesstats.QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
+    QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
     fh.truncate()
     fh.close()
 
