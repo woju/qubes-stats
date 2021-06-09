@@ -103,30 +103,30 @@ def setup_logging(level=25):
 
 
 class DownloadRecord(str):
-    re_timestamp = re.compile(r'\[(\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2})')
-    re_request_uri = re.compile(r'"GET ([^ "]+)[^"]*" [123]')
-    re_address = re.compile(r'^(\d+:)?((\d{1,3}.){3}\d{1,3})')
+    regex = re.compile(r'''
+        ^(\d+:)?(?P<address>(\d{1,3}.){3}\d{1,3}) \s
+        \S+ \s
+        \S+ \s
+        \[(?P<timestamp>\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2}) \s +0000\] \s
+        "(?P<method>[A-Z]+) (?P<request_uri>[^ "]+)[^"]*" \s
+        (?P<status_code>\d+)
+    ''', re.VERBOSE)
 
     def __init__(self, line):
         super(DownloadRecord, self).__init__(line)
-        m = self.re_timestamp.search(line)
-        if not m:
-            raise ValueError('date not found in {!r}'.format(self))
-        self.timestamp = m.group(1)
+        match = self.regex.match(line)
+        if not match:
+            raise ValueError('Cannot parse log line')
 
-        m = self.re_request_uri.search(line)
-        if not m:
-            raise ValueError('URI not found in {!r}'.format(self))
-        self.path = urllib.unquote(m.group(1))
+        if not (match.group('method') == 'GET'
+            and (match.group('request_uri').endswith('repomd.xml')
+                or match.group('request_uri').endswith('repomd.xml.metalink'))):
+            raise ValueError('Not GET or not repomd.xml')
 
-        if not self.path.endswith('repomd.xml') \
-                and not self.path.endswith('repomd.xml.metalink'):
-            raise ValueError('Not a repomd.xml')
-
-        m = self.re_address.search(line)
-        if not m:
-            raise ValueError('IP address not found in {!r}'.format(self))
-        self.address = m.group(2)
+        self.timestamp = datetime.datetime.strptime(
+            match.group('timestamp'), '%d/%b/%Y:%H:%M:%S')
+        self.path = urllib.unquote(match.group('request_uri'))
+        self.address = match.group('address')
 
         path_tokens = self.path.lstrip('/').split('/')
         if path_tokens[0][0] == '~':
@@ -135,9 +135,6 @@ class DownloadRecord(str):
         while path_tokens[0] in ('repo', 'yum'):
             path_tokens.pop(0)
         self.release = path_tokens[0]
-
-        self.timestamp = datetime.datetime.strptime(
-            self.timestamp, '%d/%b/%Y:%H:%M:%S')
 
 
 class ExitNodeAddress(list):
