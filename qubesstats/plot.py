@@ -26,10 +26,8 @@ import logging
 import logging.handlers
 import os
 
-import dateutil.parser
-
 import matplotlib
-matplotlib.use('Agg')
+matplotlib.use('Agg') # pylint: disable=wrong-import-position
 import matplotlib.patches
 import matplotlib.pyplot as plt
 import matplotlib.dates
@@ -77,6 +75,7 @@ COLOURS = [
 
 class LoadedStats(dict):
     def __init__(self, datafile):
+        super().__init__()
         data = json.load(open(datafile))
         self.meta = data['meta']
         del data['meta']
@@ -109,7 +108,7 @@ class LoadedStats(dict):
         self[key] = np.zeros(self.months.size)
         return self[key]
 
-class Graph(object):
+class Graph:
     def __init__(self, data):
         self.data = data
         self.now = self.data.months[-1]

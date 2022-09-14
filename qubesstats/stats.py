@@ -16,7 +16,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import argparse
 import collections
 import datetime
 import functools
@@ -255,8 +254,8 @@ class QubesCounter(dict):
             and self.exit_cache[record.address].was_active(record.timestamp)
 
     def count(self, record):
-        if not (record.timestamp.year, record.timestamp.month) \
-                == (self.year, self.month):
+        if (record.timestamp.year, record.timestamp.month) \
+                != (self.year, self.month):
             logging.debug('dropping, timestamp=%s', record.timestamp)
             return
         logging.log(5, 'counting %r, release=%r address=%r',

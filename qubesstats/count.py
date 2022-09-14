@@ -22,8 +22,6 @@ import json
 import logging
 import os
 
-import dateutil
-
 from . import stats
 
 parser = argparse.ArgumentParser()
