@@ -1,8 +1,6 @@
-#!/usr/bin/env python2
-
 #
 # Statistics aggregator for Qubes OS infrastructure.
-# Copyright (C) 2015-2016  Wojtek Porczyk <woju@invisiblethingslab.com>
+# Copyright (C) 2015-2022  Wojtek Porczyk <woju@invisiblethingslab.com>
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -18,8 +16,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-from __future__ import print_function
-
 import argparse
 import collections
 import datetime
@@ -29,16 +25,13 @@ import logging
 import logging.handlers
 import lzma
 import os
+import pickle
 import re
 import stat
 import sys
 import tempfile
-import urllib
-
-try:
-    import cPickle as pickle
-except ImportError:
-    import pickle
+import urllib.parse
+import urllib.request
 
 import dateutil.parser
 import stem.descriptor.reader
@@ -113,7 +106,7 @@ class DownloadRecord(str):
     re_address = re.compile(r'^(\d+:)?((\d{1,3}.){3}\d{1,3})')
 
     def __init__(self, line):
-        super(DownloadRecord, self).__init__(line)
+        super().__init__()
         m = self.re_timestamp.search(line)
         if not m:
             raise ValueError('date not found in {!r}'.format(self))
@@ -122,7 +115,7 @@ class DownloadRecord(str):
         m = self.re_request_uri.search(line)
         if not m:
             raise ValueError('URI not found in {!r}'.format(self))
-        self.path = urllib.unquote(m.group(1))
+        self.path = urllib.parse.unquote(m.group(1))
 
         if not self.path.endswith('repomd.xml') \
                 and not self.path.endswith('repomd.xml.metalink'):
@@ -169,7 +162,7 @@ class ExitNodeAddress(list):
                 i += 1
 
 
-class Release(object):
+class Release:
     def __init__(self, counter):
         self.counter = counter
         self._set_plain = set()
@@ -182,7 +175,7 @@ class Release(object):
     # approximately constant. However, Tor hides users behind exit nodes.
     # Therefore, for Tor we count requests and normalise them against users
     # who used plain HTTPS.
-    tor = property(lambda self: self._req_tor * self.plain / self._req_plain)
+    tor = property(lambda self: self._req_tor * self.plain // self._req_plain)
 
     def count(self, record):
         if self.counter.was_exit(record):
@@ -198,7 +191,7 @@ class QubesCounter(dict):
     release_class = Release
 
     def __init__(self, year, month):
-        super(QubesCounter, self).__init__()
+        super().__init__()
         self.year, self.month = (year, month)
         self.exit_cache = collections.defaultdict(ExitNodeAddress)
 
@@ -224,12 +217,13 @@ class QubesCounter(dict):
 
     def load_exit_cache(self):
         logging.log(25, 'loading exit node list')
-        self.exit_cache = pickle.load(open(self.exit_cache_file))
+        with open(self.exit_cache_file, 'rb') as fh:
+            self.exit_cache = pickle.load(fh)
 
     def fetch_exit_cache(self):
         logging.log(25, 'downloading exit node list')
         tmpfile = tempfile.NamedTemporaryFile(suffix='.tar')
-        tmpfile.write(lzma.decompress(urllib.urlopen(
+        tmpfile.write(lzma.decompress(urllib.request.urlopen(
             EXIT_LIST_URI.format(timestamp=self.timestamp)).read()))
         tmpfile.flush()
         self.bake_exit_cache([tmpfile.name])
@@ -248,7 +242,7 @@ class QubesCounter(dict):
         logging.log(25, 'parsed %d descriptors with %d addresses',
             n_desc, n_addr)
 
-        for cache in self.exit_cache.itervalues():
+        for cache in self.exit_cache.values():
             cache.compact()
 
         logging.log(25, 'saving exit node list')
@@ -283,7 +277,7 @@ class QubesJSONEncoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, Release):
             return o.asdict()
-        return super(QubesJSONEncoder, self).default(o)
+        return super().default(o)
 
     def dump(self, o, stream):
         for chunk in self.encode(o):
