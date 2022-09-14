@@ -28,7 +28,8 @@ import os
 
 import dateutil
 
-import qubesstats
+from . import stats
+
 
 parser = argparse.ArgumentParser()
 
@@ -36,18 +37,18 @@ parser.add_argument('--force-descriptor-type', metavar='TYPE',
     action='store', default=None,
     help='force descriptor type (to work around tor#21195)')
 parser.add_argument('month', metavar='YYYY-MM',
-    type=qubesstats.parse_date,
+    type=stats.parse_date,
     help='process this specific month')
 parser.add_argument('exit_list', metavar='PATH',
     nargs='*', default=['.'],
     help='location of the exit list directories (default: %(default)r)')
 
 def main():
-    qubesstats.setup_logging()
+    stats.setup_logging()
     args = parser.parse_args()
     if args.force_descriptor_type:
-        qubesstats.EXIT_DESCRIPTOR_TYPE = args.force_descriptor_type
-    counter = qubesstats.QubesCounter(args.month.year, args.month.month)
+        stats.EXIT_DESCRIPTOR_TYPE = args.force_descriptor_type
+    counter = stats.QubesCounter(args.month.year, args.month.month)
     counter.bake_exit_cache(args.exit_list)
 
 if __name__ == '__main__':

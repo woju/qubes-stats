@@ -41,7 +41,7 @@ import matplotlib.ticker
 
 import numpy as np
 
-import qubesstats
+from . import stats
 
 
 MM = 1 / 25.4
@@ -81,32 +81,32 @@ COLOURS = [
 
 class LoadedStats(dict):
     def __init__(self, datafile):
-        stats = json.load(open(datafile))
-        self.meta = stats['meta']
-        del stats['meta']
+        data = json.load(open(datafile))
+        self.meta = data['meta']
+        del data['meta']
         if 'last-updated' in self.meta:
             self.meta['last-updated'] = datetime.datetime.strptime(
-                self.meta['last-updated'], qubesstats.TIMESTAMP_FORMAT)
+                self.meta['last-updated'], stats.TIMESTAMP_FORMAT)
 
         logging.log(25, 'loaded datafile %r, last updated %r',
             datafile, self.meta['last-updated'])
 
         releases = set()
-        for mdata in list(stats.values()):
+        for mdata in list(data.values()):
             releases.update(ver.split('-')[0] for ver in mdata.keys())
         releases.discard('any')
         self.releases = list(sorted(releases,
             key=distutils.version.LooseVersion))
 
-        months = sorted(stats)
-        self.months = np.array(map(qubesstats.parse_date, months))
+        months = sorted(data)
+        self.months = np.array(map(stats.parse_date, months))
 
         for i, month in enumerate(months):
             for release in self.releases:
-                for key in stats[month]:
+                for key in data[month]:
                     if not key == release or key.startswith(release + '-'):
                         continue
-                    for series, sdata in stats[month][key].items():
+                    for series, sdata in data[month][key].items():
                         self[release, series][i] += sdata
 
     def __missing__(self, key):
@@ -114,9 +114,9 @@ class LoadedStats(dict):
         return self[key]
 
 class Graph(object):
-    def __init__(self, stats):
-        self.stats = stats
-        self.now = self.stats.months[-1]
+    def __init__(self, data):
+        self.data = data
+        self.now = self.data.months[-1]
         self.x_min = self.now.replace(year=self.now.year-3)
 
         self.fig = matplotlib.pyplot.figure(
@@ -146,14 +146,14 @@ class Graph(object):
         self.ax.yaxis.grid(True, which='major', linestyle=':', alpha=0.7)
 
     def find_label_placement(self, release_cur):
-        sdata_cur_plain = self.stats[release_cur, 'plain']
-        sdata_cur_tor = self.stats[release_cur, 'tor']
+        sdata_cur_plain = self.data[release_cur, 'plain']
+        sdata_cur_tor = self.data[release_cur, 'tor']
 
         try:
-            release_next = self.stats.releases[
-                self.stats.releases.index(release_cur) + 1]
-            sdata_next_plain = self.stats[release_next, 'plain']
-            sdata_next_tor = self.stats[release_next, 'tor']
+            release_next = self.data.releases[
+                self.data.releases.index(release_cur) + 1]
+            sdata_next_plain = self.data[release_next, 'plain']
+            sdata_next_tor = self.data[release_next, 'tor']
         except LookupError:
             # last release
             sdata_next_plain = np.zeros(sdata_cur_plain.size, dtype=np.int)
@@ -172,16 +172,16 @@ class Graph(object):
         return None, 0
 
     def add_data(self):
-        bottom = np.zeros(self.stats.months.size)
+        bottom = np.zeros(self.data.months.size)
         colours = itertools.cycle(COLOURS)
 
-        for release in self.stats.releases:
+        for release in self.data.releases:
             hue = next(colours)
             for series in ('tor', 'plain'):
-                sdata = self.stats[release, series]
+                sdata = self.data[release, series]
 
                 self.ax.bar(
-                    self.stats.months[:-1],
+                    self.data.months[:-1],
                     sdata[:-1],
                     bottom=bottom[:-1],
                     label=(release if series == 'plain' else None),
@@ -191,7 +191,7 @@ class Graph(object):
 
                 # current month
                 self.ax.bar(
-                    self.stats.months[-1:],
+                    self.data.months[-1:],
                     sdata[-1:],
                     bottom=bottom[-1:],
                     label=None,
@@ -202,8 +202,8 @@ class Graph(object):
                 bottom += sdata
 
             i, y_offset = self.find_label_placement(release)
-            if i is not None and self.stats.months[i] >= self.x_min:
-                self.ax.text(self.stats.months[i], bottom[i] - y_offset,
+            if i is not None and self.data.months[i] >= self.x_min:
+                self.ax.text(self.data.months[i], bottom[i] - y_offset,
                     release, horizontalalignment='right',
                     bbox={'facecolor': '#ffffff'})
 
@@ -218,13 +218,13 @@ class Graph(object):
     def setup_text(self):
         self.fig.text(0.02, 0.02,
             'last updated: {meta[last-updated]:%Y-%m-%d %H:%M UTC}\n'
-            '{meta[source]}'.format(meta=self.stats.meta),
+            '{meta[source]}'.format(meta=self.data.meta),
             size='x-small', alpha=0.5)
         self.fig.text(0.98, 0.02,
             'Red line: methodology of counting Tor users has changed.',
             size='x-small', alpha=0.5, ha='right')
 
-        plt.title(self.stats.meta['title'])
+        plt.title(self.data.meta['title'])
 
     def save(self, output):
         self.fig.savefig(output + '.png', format='png')
@@ -233,10 +233,10 @@ class Graph(object):
 
 
 def main():
-    qubesstats.setup_logging()
+    stats.setup_logging()
     args = parser.parse_args()
-    stats = LoadedStats(args.datafile)
-    graph = Graph(stats)
+    data = LoadedStats(args.datafile)
+    graph = Graph(data)
     graph.save(args.output)
 
 

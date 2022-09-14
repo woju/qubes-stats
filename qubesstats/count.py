@@ -28,7 +28,7 @@ import os
 
 import dateutil
 
-import qubesstats
+from . import stats
 
 parser = argparse.ArgumentParser()
 
@@ -52,20 +52,20 @@ group_month.add_argument('--last-month',
     action='store_true', default=False,
     help='process last month')
 group_month.add_argument('--month', metavar='YYYY-MM',
-    type=qubesstats.parse_date,
+    type=stats.parse_date,
     help='process this specific month')
 
 parser.add_argument('logfiles', metavar='LOGFILE',
-    nargs='*', default=qubesstats.LOGFILES,
+    nargs='*', default=stats.LOGFILES,
     help='process these logfiles instead of the default set')
 
 
 def main():
-    qubesstats.setup_logging()
+    stats.setup_logging()
     args = parser.parse_args()
 
     if args.force_descriptor_type:
-        qubesstats.EXIT_DESCRIPTOR_TYPE = args.force_descriptor_type
+        stats.EXIT_DESCRIPTOR_TYPE = args.force_descriptor_type
 
     if args.current_month:
         month = datetime.date.today()
@@ -74,7 +74,7 @@ def main():
     else:
         month = args.month
 
-    counter = qubesstats.QubesCounter(month.year, month.month)
+    counter = stats.QubesCounter(month.year, month.month)
 
     if args.force_fetch or args.current_month:
         counter.fetch_exit_cache()
@@ -99,14 +99,14 @@ def main():
     data['meta'] = {
         'title': 'Estimated Qubes OS userbase',
         'last-updated':
-            datetime.datetime.utcnow().strftime(qubesstats.TIMESTAMP_FORMAT),
+            datetime.datetime.utcnow().strftime(stats.TIMESTAMP_FORMAT),
         'comment':
             'Current month is not reliable. '
             'The methodology of counting Tor users changed on April 2018.',
         'source': 'https://github.com/woju/qubes-stats',
     }
     fh.seek(0)
-    qubesstats.QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
+    stats.QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
     fh.truncate()
     fh.close()
 
