@@ -17,6 +17,8 @@
 #
 
 import collections
+import csv
+import dataclasses
 import datetime
 import functools
 import json
@@ -43,24 +45,18 @@ LOGFILES = [
 
 EXIT_LIST_URI = 'https://collector.torproject.org/archive/exit-lists/' \
     'exit-list-{timestamp}.tar.xz'
-
 EXIT_DESCRIPTOR_TOLERANCE = 24 # hours
-
 EXIT_DESCRIPTOR_TYPE = None
-
 SYSLOG_TRY_SOCKETS = [
     '/var/run/log', # FreeBSD
     '/dev/log',     # Linux
 ]
-
 CACHEDIR = '/tmp'
-
+RELEASE_REGEXP = re.compile(r'^/(?P<release>[^~/]+)/(.*/)?repomd\.xml(\.metalink)?$')
 DEFAULT_DATE = datetime.datetime.now().replace(
     day=1, hour=0, minute=0, second=0, microsecond=0)
 parse_date = functools.partial(dateutil.parser.parse, default=DEFAULT_DATE)
-
 TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
-
 logging.addLevelName(25, 'NOTICE')
 
 class BetterSysLogHandler(logging.handlers.SysLogHandler):
@@ -99,47 +95,95 @@ def setup_logging(level=25):
     logging.root.setLevel(level)
 
 
-class DownloadRecord(str):
-    re_timestamp = re.compile(r'\[(\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2})')
-    re_request_uri = re.compile(r'"GET ([^ "]+)[^"]*" [123]')
-    re_address = re.compile(r'^(\d+:)?((\d{1,3}.){3}\d{1,3})')
+@dataclasses.dataclass
+class Request:
+    address: str
+    timestamp: datetime.datetime
+    path: str
+    status: int
 
-    def __init__(self, line):
-        super().__init__()
-        m = self.re_timestamp.search(line)
-        if not m:
-            raise ValueError('date not found in {!r}'.format(self))
-        self.timestamp = m.group(1)
+@dataclasses.dataclass
+class Record:
+    address: str
+    timestamp: datetime.datetime
+    release: str
 
-        m = self.re_request_uri.search(line)
-        if not m:
-            raise ValueError('URI not found in {!r}'.format(self))
-        self.path = urllib.parse.unquote(m.group(1))
+def match_release(requests, regexp_path):
+    for request in requests:
+        match = regexp_path.search(request.path)
+        if not match:
+            logging.debug('dropping, no valid release (path=%s)', request.path)
+            continue
+        yield Record(request.address, request.timestamp, match.group('release'))
 
-        if not self.path.endswith('repomd.xml') \
-                and not self.path.endswith('repomd.xml.metalink'):
-            raise ValueError('Not a repomd.xml')
+def filter_for_status(requests):
+    """
+    Reject statuses outside of range(200, 400)
 
-        m = self.re_address.search(line)
-        if not m:
-            raise ValueError('IP address not found in {!r}'.format(self))
-        self.address = m.group(2)
+    We're not interested in 403-404, because people might invent their own URIs
+    and releases, so count only the valid ones. Redirects are included.
+    """
+    for request in requests:
+        if not 200 <= request.status < 400:
+            continue
+        yield request
 
-        path_tokens = self.path.lstrip('/').split('/')
-        if path_tokens[0][0] == '~':
-            raise ValueError(
-                'personal repo ({!r}), not counting'.format(path_tokens[0]))
-        while path_tokens[0] in ('repo', 'yum'):
-            path_tokens.pop(0)
-        self.release = path_tokens[0]
+def parse_combined(file):
+    """
+    Parses "combined" log format
 
-        self.timestamp = datetime.datetime.strptime(
-            self.timestamp, '%d/%b/%Y:%H:%M:%S')
+    Does not include requests with status 400.
 
+    .. seealso::
+
+        https://en.wikipedia.org/wiki/Common_Log_Format
+            Wikipedia article on the format
+
+        https://nginx.org/en/docs/http/ngx_http_log_module.html#log_format
+            nginx' definition
+    """
+
+    # pylint: disable=too-many-locals,unused-variable
+    for line in csv.reader(file, delimiter=' '):
+        try:
+            (address, ident, user, localtime1, localtime2, request, status,
+                length, referer, user_agent) = line
+
+            status, length = int(status), int(length)
+            if status == 400:
+                # there's no guarantee that the split succeeds, because the
+                # first line might be anything, even garbage; the line is
+                # invalid anyway
+                continue
+
+            # https://www.rfc-editor.org/rfc/rfc9112.html#section-3.2 notes that
+            # some clients might not properly format request line and insert
+            # spaces in request-target (hereinafter `path`), even though it's
+            # forbidden; RFC says server should have responeded either with 400
+            # (rejected above) or 301, but we can't reject 301, so we need to
+            # parse anyway and reject on regexp
+            method, request_right = request.split(' ', 1)
+            path, http_version = request_right.rsplit(' ', 1)
+
+            timestamp = datetime.datetime.strptime(f'{localtime1} {localtime2}',
+                '[%d/%b/%Y:%H:%M:%S %z]')
+            path = urllib.parse.unquote(path)
+
+            yield Request(address, timestamp, path, status)
+        except:
+            logging.error('error parsing log line: %r', line)
+            raise
+
+def parse_haproxy(file):
+    # TODO
+    raise NotImplementedError()
 
 class ExitNodeAddress(list):
     def register(self, descriptor):
-        self.append((descriptor.published, descriptor.last_status))
+        self.append((
+            descriptor.published.replace(tzinfo=datetime.timezone.utc),
+            descriptor.last_status.replace(tzinfo=datetime.timezone.utc),
+        ))
 
     def was_active(self, date):
         # This assumes that an IP address is active for the entire lifespan of
@@ -178,13 +222,20 @@ class Release:
 
     def count(self, record):
         if self.counter.was_exit(record):
+            logging.log(5, 'counted as tor')
             self._req_tor += 1
         else:
+            logging.log(5, 'counted as plain')
             self._set_plain.add(record.address)
             self._req_plain += 1
 
     def asdict(self):
         return {'plain': self.plain, 'tor': self.tor}
+
+    def __repr__(self):
+        return (
+            f'<{type(self).__name__} len(set_plain)={len(self._set_plain)}'
+            f' req_plain={self._req_plain} req_tor={self._req_tor}>')
 
 class QubesCounter(dict):
     release_class = Release
@@ -248,27 +299,28 @@ class QubesCounter(dict):
         pickle.dump(self.exit_cache,
             open(self.exit_cache_file, 'wb'), pickle.HIGHEST_PROTOCOL)
 
-    def was_exit(self, record):
+    def was_exit(self, request):
         # avoid instantiating new object
-        return record.address in self.exit_cache \
-            and self.exit_cache[record.address].was_active(record.timestamp)
+        return request.address in self.exit_cache \
+            and self.exit_cache[request.address].was_active(request.timestamp)
 
     def count(self, record):
         if (record.timestamp.year, record.timestamp.month) \
                 != (self.year, self.month):
             logging.debug('dropping, timestamp=%s', record.timestamp)
             return
+
         logging.log(5, 'counting %r, release=%r address=%r',
             record, record.release, record.address)
+
         self[record.release].count(record)
         self['any'].count(record)
 
     def process(self, stream):
-        for line in stream:
-            try:
-                record = DownloadRecord(line)
-            except ValueError:
-                continue
+        requests = parse_combined(stream)
+        requests = filter_for_status(requests)
+        records = match_release(request, RELEASE_REGEXP)
+        for record in records:
             self.count(record)
 
 
