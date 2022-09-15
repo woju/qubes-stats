@@ -16,31 +16,28 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import argparse
+import click
 
 from . import stats
 
-parser = argparse.ArgumentParser()
-
-parser.add_argument('--force-descriptor-type', metavar='TYPE',
-    action='store', default=None,
+@click.command()
+@click.option('--force-descriptor-type', metavar='TYPE',
     help='force descriptor type (to work around tor#21195)')
-parser.add_argument('month', metavar='YYYY-MM',
-    type=stats.parse_date,
+@click.argument('month', metavar='YYYY-MM',
+    type=click.DateTime('%Y-%m'),
     help='process this specific month')
-parser.add_argument('exit_list', metavar='PATH',
-    nargs='*', default=['.'],
+@click.argument('exit_list', metavar='PATH', nargs=-1, default=['.'],
+    type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help='location of the exit list directories (default: %(default)r)')
-
-def main():
+def main(force_descriptor_type, month, exit_list):
     stats.setup_logging()
-    args = parser.parse_args()
-    if args.force_descriptor_type:
-        stats.EXIT_DESCRIPTOR_TYPE = args.force_descriptor_type
-    counter = stats.QubesCounter(args.month.year, args.month.month)
-    counter.bake_exit_cache(args.exit_list)
+    if force_descriptor_type:
+        stats.EXIT_DESCRIPTOR_TYPE = force_descriptor_type
+    counter = stats.QubesCounter(month.year, month.month)
+    counter.bake_exit_cache(exit_list)
 
 if __name__ == '__main__':
+    # pylint: disable=no-value-for-parameter
     main()
 
 # vim: ts=4 sts=4 sw=4 et

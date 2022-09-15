@@ -1,10 +1,11 @@
 import io
+import sys
 
-from qubesstats import stats
+import click.testing
 
-def test_qubes():
-    counter = stats.QubesCounter(2022, 7)
-    logfile = io.StringIO('''\
+from qubesstats import count, stats
+
+LOGFILE = '''\
 127.81.0.1 - - [01/Jul/2022:00:01:15 +0000] "GET /r4.1/current/vm/fc34/repodata/repomd.xml HTTP/1.1" 200 3859 "-" "libdnf (Fedora 34; generic; Linux.x86_64)"
 127.81.0.1 - - [01/Jul/2022:00:01:16 +0000] "GET /r4.1/current/vm/fc34/repodata/repomd.xml.asc HTTP/1.1" 200 833 "-" "libdnf (Fedora 34; generic; Linux.x86_64)"
 127.81.0.1 - - [01/Jul/2022:00:01:18 +0000] "GET /r4.1/current/vm/fc34/repodata/repomd.xml HTTP/1.1" 200 3859 "-" "libdnf (Fedora 34; generic; Linux.x86_64)"
@@ -42,12 +43,9 @@ def test_qubes():
 127.81.0.1 - - [01/Jul/2022:00:02:55 +0000] "GET /r4.1/current/vm/fc34/repodata/repomd.xml HTTP/1.1" 200 3859 "-" "libdnf (Fedora 34; generic; Linux.x86_64)"
 127.81.0.1 - - [01/Jul/2022:00:02:56 +0000] "GET /r4.1/current/vm/fc34/repodata/repomd.xml.asc HTTP/1.1" 200 833 "-" "libdnf (Fedora 34; generic; Linux.x86_64)"
 127.81.0.1 - - [01/Jul/2022:00:02:57 +0000] "GET /r4.1/current/vm/fc34/repodata/repomd.xml HTTP/1.1" 200 3859 "-" "libdnf (Fedora 34; generic; Linux.x86_64)"
-''')
-    counter.process(logfile)
-    data = {'2022-07': counter}
-    fh = io.StringIO()
-    stats.QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
-    assert fh.getvalue() == '''\
+'''
+
+DATA_PLAIN = '''\
 {
   "2022-07": {
     "any": {
@@ -64,3 +62,52 @@ def test_qubes():
     }
   }
 }'''
+
+DATA_ANNOTATED = '''\
+{
+  "2022-07": {
+    "any": {
+      "plain": 10,
+      "tor": 0
+    },
+    "r4.0": {
+      "plain": 3,
+      "tor": 0
+    },
+    "r4.1": {
+      "plain": 7,
+      "tor": 0
+    }
+  },
+  "meta": {
+    "comment": "Current month is not reliable. The methodology of counting Tor users changed on April 2018.",
+    "source": "https://github.com/woju/qubes-stats",
+    "title": "Estimated Qubes OS userbase"
+  }
+}'''
+
+def test_qubes():
+    counter = stats.QubesCounter(2022, 7)
+    logfile = io.StringIO(LOGFILE)
+    counter.process(logfile)
+    data = {'2022-07': counter}
+    fh = io.StringIO()
+    stats.QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
+    assert fh.getvalue() == DATA_PLAIN
+
+def test_count():
+    runner = click.testing.CliRunner()
+    with runner.isolated_filesystem():
+        with open('access.log', 'w') as file:
+            file.write(LOGFILE)
+        result = runner.invoke(count.main, ['--datafile', 'stats.json', '--month', '2022-07', 'access.log', '--no-last-updated'])
+        if result.exit_code != 0:
+            if result.stdout_bytes is not None:
+                sys.stdout.buffer.write(result.stdout_bytes)
+            if result.stderr_bytes is not None:
+                sys.stderr.buffer.write(result.stderr_bytes)
+            if result.exception is not None:
+                raise result.exception
+            assert result.exit_code == 0
+        with open('stats.json', 'r') as file:
+            assert file.read() == DATA_ANNOTATED

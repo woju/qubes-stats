@@ -16,7 +16,6 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import argparse
 import collections
 import datetime
 import distutils.version
@@ -26,6 +25,7 @@ import logging
 import logging.handlers
 import os
 
+import click
 import matplotlib
 matplotlib.use('Agg') # pylint: disable=wrong-import-position
 import matplotlib.patches
@@ -43,21 +43,6 @@ DPI = 300.0
 
 BAR_WIDTH = 31.0  # days on X axis
 
-parser = argparse.ArgumentParser()
-
-parser = argparse.ArgumentParser()
-parser.add_argument('--datafile', metavar='FILE',
-    default=os.path.expanduser('~/.stats.json'),
-    help='location of the data file (default: %(default)s)')
-
-parser.add_argument('--output', metavar='PATH',
-    default=os.path.expanduser('~/public_html/counter/stats'),
-    help='location of the output files (default: %(default)s)')
-
-x_major_locator = matplotlib.dates.MonthLocator(bymonth=[1, 4, 7, 10])
-x_major_formatter = matplotlib.dates.DateFormatter('%Y-%m')
-y_major_formatter = matplotlib.ticker.ScalarFormatter()
-
 Colour = collections.namedtuple('Colour', (
     'plain', 'tor', 'current_plain', 'current_tor'))
 
@@ -73,10 +58,14 @@ COLOURS = [
     Hue(('#204a87', '#3465a4', '#729fcf')),  # SkyBlue
 ]
 
+x_major_locator = matplotlib.dates.MonthLocator(bymonth=[1, 4, 7, 10])
+x_major_formatter = matplotlib.dates.DateFormatter('%Y-%m')
+y_major_formatter = matplotlib.ticker.ScalarFormatter()
+
 class LoadedStats(dict):
     def __init__(self, datafile):
         super().__init__()
-        data = json.load(open(datafile))
+        data = json.load(datafile)
         self.meta = data['meta']
         del data['meta']
         if 'last-updated' in self.meta:
@@ -227,15 +216,25 @@ class Graph:
         plt.close()
 
 
-def main():
+@click.command()
+@click.option('--datafile', metavar='FILE',
+    type=click.File('r'),
+    default=os.path.expanduser('~/.stats.json'),
+    help='location of the data file (default: %(default)s)')
+
+@click.option('--output', metavar='PATH',
+    type=click.Path(dir_okay=True, file_okay=False, exists=True),
+    default=os.path.expanduser('~/public_html/counter/stats'),
+    help='location of the output files (default: %(default)s)')
+
+def main(datafile, output):
     stats.setup_logging()
-    args = parser.parse_args()
-    data = LoadedStats(args.datafile)
+    data = LoadedStats(datafile)
     graph = Graph(data)
-    graph.save(args.output)
+    graph.save(output)
 
 
 if __name__ == '__main__':
-    main()
+    main() # pylint: disable=no-value-for-parameter
 
 # vim: ts=4 sts=4 sw=4 et

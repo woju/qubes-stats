@@ -16,96 +16,124 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
 
-import argparse
 import datetime
 import json
 import logging
+import math
 import os
+
+import click
 
 from . import stats
 
-parser = argparse.ArgumentParser()
+def get_month(delta=0):
+    month = datetime.date.today().replace(day=1)
+    for _ in range(abs(delta)):
+        month = (month + math.copysign(1, delta) * datetime.timedelta(days=1)).replace(day=1)
+    return month
 
-parser.add_argument('--datafile', metavar='FILE',
+def cb_month(ctx, param, value):
+#   click.echo(f'cb_month(..., {value=})')
+    if value is None:
+        return
+    ctx.params['month'] = datetime.datetime.strptime(value, '%Y-%m').date()
+
+def make_cb_month_symbolic(delta):
+    def callback(ctx, _param, value):
+#       click.echo(f'callback::<{delta=}>(..., {value=})')
+        if not value:
+            return
+        if delta == 0:
+            ctx.params['force_fetch'] = True
+        ctx.params['month'] = get_month(delta)
+#       click.echo(f"{ctx.params['month']=}")
+    return callback
+
+def cb_force(ctx, _param, value):
+#   click.echo(f'cb_force(..., {value=})')
+    if value is not None:
+        ctx.params['force_fetch'] = value
+
+@click.command()
+
+@click.option('--force-fetch/--no-force-fetch', expose_value=False,
+    callback=cb_force, default=None,
+    help='force fetching exit node list')
+@click.option('--month', metavar='MONTH', expose_value=False,
+    callback=cb_month,
+    help='process this specific month')
+@click.option('--this-month', is_flag=True, expose_value=False,
+    callback=make_cb_month_symbolic(0),
+    help='process current month (also selects --force-fetch)')
+@click.option('--last-month', is_flag=True, expose_value=False,
+    callback=make_cb_month_symbolic(-1),
+    help='process last month')
+
+@click.option('--datafile', metavar='FILE', type=click.Path(),
     default=os.path.expanduser('~/.stats.json'),
     help='location of the data file (default: %(default)s)')
-
-parser.add_argument('--force-fetch',
-    action='store_true', default=False,
-    help='force fetching exit node list')
-
-parser.add_argument('--force-descriptor-type', metavar='TYPE',
-    action='store', default=None,
+@click.option('--force-descriptor-type', metavar='TYPE',
     help='force descriptor type (to work around tor#21195)')
 
-group_month = parser.add_mutually_exclusive_group(required=True)
-group_month.add_argument('--current-month',
-    action='store_true', default=False,
-    help='process current month (also selects --force-fetch)')
-group_month.add_argument('--last-month',
-    action='store_true', default=False,
-    help='process last month')
-group_month.add_argument('--month', metavar='YYYY-MM',
-    type=stats.parse_date,
-    help='process this specific month')
+@click.option('--last-updated/--no-last-updated', default=True,
+    hidden=True)
 
-parser.add_argument('logfiles', metavar='LOGFILE',
-    nargs='*', default=stats.LOGFILES,
-    help='process these logfiles instead of the default set')
+@click.argument('logfiles', metavar='LOGFILE', type=click.Path(),
+    nargs=-1)
+def main(datafile, force_descriptor_type, logfiles, last_updated, month=None,
+        force_fetch=False):
+    # pylint: disable=too-many-arguments
+    if month is None:
+        month = get_month(0)
+        force_fetch = True
 
-
-def main():
     stats.setup_logging()
-    args = parser.parse_args()
 
-    if args.force_descriptor_type:
-        stats.EXIT_DESCRIPTOR_TYPE = args.force_descriptor_type
+    if not logfiles:
+        logfiles = stats.LOGFILES
 
-    if args.current_month:
-        month = datetime.date.today()
-    elif args.last_month:
-        month = datetime.date.today().replace(day=1)-datetime.timedelta(days=1)
-    else:
-        month = args.month
+    if force_descriptor_type:
+        stats.EXIT_DESCRIPTOR_TYPE = force_descriptor_type
 
     counter = stats.QubesCounter(month.year, month.month)
 
-    if args.force_fetch or args.current_month:
+    if force_fetch:
         counter.fetch_exit_cache()
     else:
         counter.load_or_fetch_exit_cache()
 
-    for filename in args.logfiles:
+    for filename in logfiles:
         logging.log(25, 'parsing logfile %r', filename)
-        counter.process(open(filename))
+        with open(filename) as fh:
+            counter.process(fh)
 
     logging.log(25, 'writing stats for period %r to datafile %r',
-        counter.timestamp, args.datafile)
+        counter.timestamp, datafile)
 
     try:
-        fh = open(args.datafile, 'r+')
+        fh = open(datafile, 'r+')
         data = json.load(fh)
     except IOError:
-        fh = open(args.datafile, 'w')
+        fh = open(datafile, 'w')
         data = {}
-
-    data[counter.timestamp] = counter
-    data['meta'] = {
-        'title': 'Estimated Qubes OS userbase',
-        'last-updated':
-            datetime.datetime.utcnow().strftime(stats.TIMESTAMP_FORMAT),
-        'comment':
-            'Current month is not reliable. '
-            'The methodology of counting Tor users changed on April 2018.',
-        'source': 'https://github.com/woju/qubes-stats',
-    }
-    fh.seek(0)
-    stats.QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
-    fh.truncate()
-    fh.close()
-
+    with fh:
+        data[counter.timestamp] = counter
+        data['meta'] = {
+            'title': 'Estimated Qubes OS userbase',
+            'comment':
+                'Current month is not reliable. '
+                'The methodology of counting Tor users changed on April 2018.',
+            'source': 'https://github.com/woju/qubes-stats',
+        }
+        if last_updated:
+            data['meta']['last-updated'] = (
+                datetime.datetime.utcnow().strftime(stats.TIMESTAMP_FORMAT))
+        fh.seek(0)
+        stats.QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
+        fh.truncate()
 
 if __name__ == '__main__':
+    # pylint: disable=no-value-for-parameter
     main()
 
 # vim: ts=4 sts=4 sw=4 et
