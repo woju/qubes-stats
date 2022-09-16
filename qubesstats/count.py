@@ -20,11 +20,15 @@ import datetime
 import json
 import logging
 import math
-import os
+import pathlib
 
 import click
 
-from . import stats, utils
+from . import (
+    schema,
+    stats,
+    utils,
+)
 
 def get_month(delta=0):
     month = datetime.date.today().replace(day=1)
@@ -69,18 +73,16 @@ def cb_force(ctx, _param, value):
     callback=make_cb_month_symbolic(-1),
     help='process last month')
 
-@click.option('--datafile', metavar='FILE', type=click.Path(),
-    default=os.path.expanduser('~/.stats.json'),
-    help='location of the data file (default: %(default)s)')
 @click.option('--force-descriptor-type', metavar='TYPE',
     help='force descriptor type (to work around tor#21195)')
 
 @click.option('--last-updated/--no-last-updated', default=True,
     hidden=True)
 
-@click.argument('logfiles', metavar='LOGFILE', type=click.Path(),
-    nargs=-1)
-def main(datafile, force_descriptor_type, logfiles, last_updated, month=None,
+@click.argument('configfile', metavar='FILE', type=click.File('rb'),
+    default='/etc/qubesstats.toml')
+
+def main(configfile, force_descriptor_type, last_updated, month=None,
         force_fetch=False):
     # pylint: disable=too-many-arguments
     if month is None:
@@ -89,25 +91,30 @@ def main(datafile, force_descriptor_type, logfiles, last_updated, month=None,
 
     utils.setup_logging()
 
-    if not logfiles:
-        logfiles = stats.LOGFILES
+    config = schema.load_config(configfile)
+    counter = stats.QubesCounter(month.year, month.month)
 
     if force_descriptor_type:
         stats.EXIT_DESCRIPTOR_TYPE = force_descriptor_type
-
-    counter = stats.QubesCounter(month.year, month.month)
 
     if force_fetch:
         counter.fetch_exit_cache()
     else:
         counter.load_or_fetch_exit_cache()
 
-    for filename in logfiles:
-        logging.log(25, 'parsing logfile %r', filename)
-        with open(filename) as fh:
-            counter.process(fh)
+    for parserconfig in config['parsers']:
+        assert parserconfig['format'] == 'combined'
+        for path in parserconfig['files']:
+            logging.log(25, 'parsing logfile %r', path)
+            with open(path) as logfile:
+                requests = stats.parse_combined(logfile)
+                requests = stats.filter_for_status(requests)
+                for record in stats.release_filter(requests, parserconfig['regexp_path']):
+                    counter.count(record)
 
-    logging.log(25, 'writing stats for period %r to datafile %r',
+    datafile = pathlib.Path(config['path']) / 'stats.json'
+
+    logging.log(25, 'writing stats for period %r to datafile %s',
         counter.timestamp, datafile)
 
     try:
@@ -119,7 +126,7 @@ def main(datafile, force_descriptor_type, logfiles, last_updated, month=None,
     with fh:
         data[counter.timestamp] = counter
         data['meta'] = {
-            'title': 'Estimated Qubes OS userbase',
+            'title': config['title'],
             'comment':
                 'Current month is not reliable. '
                 'The methodology of counting Tor users changed on April 2018.',

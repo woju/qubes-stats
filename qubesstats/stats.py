@@ -26,7 +26,6 @@ import logging.handlers
 import lzma
 import os
 import pickle
-import re
 import tempfile
 import urllib.parse
 import urllib.request
@@ -44,7 +43,6 @@ EXIT_LIST_URI = 'https://collector.torproject.org/archive/exit-lists/' \
 EXIT_DESCRIPTOR_TOLERANCE = 24 # hours
 EXIT_DESCRIPTOR_TYPE = None
 CACHEDIR = '/tmp'
-RELEASE_REGEXP = re.compile(r'^/(?P<release>[^~/]+)/(.*/)?repomd\.xml(\.metalink)?$')
 @dataclasses.dataclass
 class Request:
     address: str
@@ -77,6 +75,20 @@ def filter_for_status(requests):
         if not 200 <= request.status < 400:
             continue
         yield request
+
+@dataclasses.dataclass
+class Record:
+    address: str
+    timestamp: datetime.datetime
+    release: str
+
+def release_filter(requests, regexp_path):
+    for request in requests:
+        match = regexp_path.search(request.path)
+        if not match:
+            logging.debug('dropping, no valid release (path=%s)', request.path)
+            continue
+        yield Record(request.address, request.timestamp, match.group('release'))
 
 def parse_combined(file):
     """
@@ -127,6 +139,11 @@ def parse_combined(file):
 def parse_haproxy(file):
     # TODO
     raise NotImplementedError()
+
+def get_parser_from_config(parserconfig):
+    assert parserconfig['format'] == 'combined'
+    return parse_combined
+
 
 class ExitNodeAddress(list):
     def register(self, descriptor):
@@ -265,13 +282,6 @@ class QubesCounter(dict):
 
         self[record.release].count(record)
         self['any'].count(record)
-
-    def process(self, stream):
-        requests = parse_combined(stream)
-        requests = filter_for_status(requests)
-        records = match_release(request, RELEASE_REGEXP)
-        for record in records:
-            self.count(record)
 
 
 class QubesJSONEncoder(json.JSONEncoder):
