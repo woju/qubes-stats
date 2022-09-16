@@ -35,7 +35,7 @@ import matplotlib.ticker
 
 import numpy as np
 
-from . import stats
+from . import utils
 
 
 MM = 1 / 25.4
@@ -70,7 +70,7 @@ class LoadedStats(dict):
         del data['meta']
         if 'last-updated' in self.meta:
             self.meta['last-updated'] = datetime.datetime.strptime(
-                self.meta['last-updated'], stats.TIMESTAMP_FORMAT)
+                self.meta['last-updated'], utils.TIMESTAMP_FORMAT)
 
         logging.log(25, 'loaded datafile %r, last updated %r',
             datafile, self.meta['last-updated'])
@@ -83,7 +83,7 @@ class LoadedStats(dict):
             key=distutils.version.LooseVersion))
 
         months = sorted(data)
-        self.months = np.array(map(stats.parse_date, months))
+        self.months = np.array(map(utils.parse_date, months))
 
         for i, month in enumerate(months):
             for release in self.releases:
@@ -228,7 +228,7 @@ class Graph:
     help='location of the output files (default: %(default)s)')
 
 def main(datafile, output):
-    stats.setup_logging()
+    utils.setup_logging()
     data = LoadedStats(datafile)
     graph = Graph(data)
     graph.save(output)

@@ -20,7 +20,6 @@ import collections
 import csv
 import dataclasses
 import datetime
-import functools
 import json
 import logging
 import logging.handlers
@@ -28,13 +27,10 @@ import lzma
 import os
 import pickle
 import re
-import stat
-import sys
 import tempfile
 import urllib.parse
 import urllib.request
 
-import dateutil.parser
 import stem.descriptor.reader
 
 LOGFILES = [
@@ -47,54 +43,8 @@ EXIT_LIST_URI = 'https://collector.torproject.org/archive/exit-lists/' \
     'exit-list-{timestamp}.tar.xz'
 EXIT_DESCRIPTOR_TOLERANCE = 24 # hours
 EXIT_DESCRIPTOR_TYPE = None
-SYSLOG_TRY_SOCKETS = [
-    '/var/run/log', # FreeBSD
-    '/dev/log',     # Linux
-]
 CACHEDIR = '/tmp'
 RELEASE_REGEXP = re.compile(r'^/(?P<release>[^~/]+)/(.*/)?repomd\.xml(\.metalink)?$')
-DEFAULT_DATE = datetime.datetime.now().replace(
-    day=1, hour=0, minute=0, second=0, microsecond=0)
-parse_date = functools.partial(dateutil.parser.parse, default=DEFAULT_DATE)
-TIMESTAMP_FORMAT = '%Y-%m-%dT%H:%M:%SZ'
-logging.addLevelName(25, 'NOTICE')
-
-class BetterSysLogHandler(logging.handlers.SysLogHandler):
-    priority_map = logging.handlers.SysLogHandler.priority_map.copy()
-    priority_map['NOTICE'] = 'notice'
-
-def excepthook(exctype, value, traceback):
-    logging.exception('exception')
-    return sys.__excepthook__(exctype, value, traceback)
-
-def setup_logging(level=25):
-    # guess where the syslogd might listen
-    handler = None
-    for address in SYSLOG_TRY_SOCKETS:
-        try:
-            if not stat.S_ISSOCK(os.stat(address).st_mode):
-                continue
-        except OSError:
-            continue
-
-        handler = BetterSysLogHandler(address=address)
-
-    if handler is None:
-        # default, which probably will connect over UDP
-        handler = BetterSysLogHandler()
-
-    handler.setFormatter(
-        logging.Formatter('%(module)s[%(process)d]: %(message)s'))
-    logging.root.addHandler(handler)
-
-    handler = logging.StreamHandler(sys.stderr)
-    handler.setFormatter(logging.Formatter('%(asctime)s %(message)s'))
-    logging.root.addHandler(handler)
-
-    sys.excepthook = excepthook
-    logging.root.setLevel(level)
-
-
 @dataclasses.dataclass
 class Request:
     address: str

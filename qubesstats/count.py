@@ -24,7 +24,7 @@ import os
 
 import click
 
-from . import stats
+from . import stats, utils
 
 def get_month(delta=0):
     month = datetime.date.today().replace(day=1)
@@ -87,7 +87,7 @@ def main(datafile, force_descriptor_type, logfiles, last_updated, month=None,
         month = get_month(0)
         force_fetch = True
 
-    stats.setup_logging()
+    utils.setup_logging()
 
     if not logfiles:
         logfiles = stats.LOGFILES
@@ -127,7 +127,7 @@ def main(datafile, force_descriptor_type, logfiles, last_updated, month=None,
         }
         if last_updated:
             data['meta']['last-updated'] = (
-                datetime.datetime.utcnow().strftime(stats.TIMESTAMP_FORMAT))
+                datetime.datetime.utcnow().strftime(utils.TIMESTAMP_FORMAT))
         fh.seek(0)
         stats.QubesJSONEncoder(sort_keys=True, indent=2).dump(data, fh)
         fh.truncate()

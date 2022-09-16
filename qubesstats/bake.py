@@ -18,7 +18,7 @@
 
 import click
 
-from . import stats
+from . import stats, utils
 
 @click.command()
 @click.option('--force-descriptor-type', metavar='TYPE',
@@ -30,7 +30,7 @@ from . import stats
     type=click.Path(exists=True, dir_okay=True, file_okay=False),
     help='location of the exit list directories (default: %(default)r)')
 def main(force_descriptor_type, month, exit_list):
-    stats.setup_logging()
+    utils.setup_logging()
     if force_descriptor_type:
         stats.EXIT_DESCRIPTOR_TYPE = force_descriptor_type
     counter = stats.QubesCounter(month.year, month.month)
