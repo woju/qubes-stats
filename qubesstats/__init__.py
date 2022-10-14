@@ -133,12 +133,19 @@ class DownloadRecord(str):
             raise ValueError('IP address not found in {!r}'.format(self))
         self.address = m.group(2)
 
+        if '$releasever' in self.path:
+            raise ValueError('misconfigured client')
+
         path_tokens = self.path.lstrip('/').split('/')
         if path_tokens[0][0] == '~':
             raise ValueError(
                 'personal repo ({!r}), not counting'.format(path_tokens[0]))
         while path_tokens[0] in ('repo', 'yum'):
             path_tokens.pop(0)
+
+        if 'contrib' in path_tokens[0]:
+            raise ValueError('contrib repo')
+
         self.release = path_tokens[0]
 
         self.timestamp = datetime.datetime.strptime(
