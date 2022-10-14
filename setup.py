@@ -15,7 +15,6 @@ if __name__ == '__main__':
         packages=['qubesstats'],
         install_requires=[
 #           'matplotlib',
-            'pyliblzma',
             'python_dateutil',
             'stem',
         ],
