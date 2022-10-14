@@ -113,7 +113,7 @@ class DownloadRecord(str):
     re_address = re.compile(r'^(\d+:)?((\d{1,3}.){3}\d{1,3})')
 
     def __init__(self, line):
-        super(DownloadRecord, self).__init__(line)
+        super().__init__()
         m = self.re_timestamp.search(line)
         if not m:
             raise ValueError('date not found in {!r}'.format(self))
@@ -122,7 +122,7 @@ class DownloadRecord(str):
         m = self.re_request_uri.search(line)
         if not m:
             raise ValueError('URI not found in {!r}'.format(self))
-        self.path = urllib.unquote(m.group(1))
+        self.path = urllib.parse.unquote(m.group(1))
 
         if not self.path.endswith('repomd.xml') \
                 and not self.path.endswith('repomd.xml.metalink'):
@@ -133,12 +133,19 @@ class DownloadRecord(str):
             raise ValueError('IP address not found in {!r}'.format(self))
         self.address = m.group(2)
 
+        if '$releasever' in self.path:
+            raise ValueError('misconfigured client')
+
         path_tokens = self.path.lstrip('/').split('/')
         if path_tokens[0][0] == '~':
             raise ValueError(
                 'personal repo ({!r}), not counting'.format(path_tokens[0]))
         while path_tokens[0] in ('repo', 'yum'):
             path_tokens.pop(0)
+
+        if 'contrib' in path_tokens[0]:
+            raise ValueError('contrib repo')
+
         self.release = path_tokens[0]
 
         self.timestamp = datetime.datetime.strptime(
@@ -224,12 +231,12 @@ class QubesCounter(dict):
 
     def load_exit_cache(self):
         logging.log(25, 'loading exit node list')
-        self.exit_cache = pickle.load(open(self.exit_cache_file))
+        self.exit_cache = pickle.load(open(self.exit_cache_file, 'rb'))
 
     def fetch_exit_cache(self):
         logging.log(25, 'downloading exit node list')
         tmpfile = tempfile.NamedTemporaryFile(suffix='.tar')
-        tmpfile.write(lzma.decompress(urllib.urlopen(
+        tmpfile.write(lzma.decompress(urllib.request.urlopen(
             EXIT_LIST_URI.format(timestamp=self.timestamp)).read()))
         tmpfile.flush()
         self.bake_exit_cache([tmpfile.name])
@@ -248,7 +255,7 @@ class QubesCounter(dict):
         logging.log(25, 'parsed %d descriptors with %d addresses',
             n_desc, n_addr)
 
-        for cache in self.exit_cache.itervalues():
+        for cache in self.exit_cache.values():
             cache.compact()
 
         logging.log(25, 'saving exit node list')

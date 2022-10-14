@@ -99,7 +99,7 @@ class LoadedStats(dict):
             key=distutils.version.LooseVersion))
 
         months = sorted(stats)
-        self.months = np.array(map(qubesstats.parse_date, months))
+        self.months = np.array(list(map(qubesstats.parse_date, months)))
 
         for i, month in enumerate(months):
             for release in self.releases:
